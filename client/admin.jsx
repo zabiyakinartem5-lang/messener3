@@ -360,7 +360,7 @@ function MarketAdmin() {
   async function remove(item){if(!confirm('Remove this marketplace listing?'))return;try{await api('DELETE','/admin/market/listings/'+item.id);toast('Listing removed');load();}catch(e){setErr(e.message);}}
   if(!data)return <div className={err?'error':'muted'}>{err||'Loading…'}</div>;
   return <><div className="stat-grid">
-    <div className="stat-card"><span className="stat-ic">🔷</span><b>{data.msgSupply.toLocaleString()}</b><small>MSG in wallets</small></div>
+    <div className="stat-card"><span className="stat-ic msg-stat-mark">M</span><b>{data.msgSupply.toLocaleString()}</b><small>MSG in wallets</small></div>
     <div className="stat-card"><span className="stat-ic">🛍</span><b>{data.active.length}</b><small>Active listings</small></div>
     <div className="stat-card"><span className="stat-ic">🤝</span><b>{data.sales.toLocaleString()}</b><small>Completed sales</small></div>
     <div className="stat-card"><span className="stat-ic">📈</span><b>{data.volume.toLocaleString()}</b><small>MSG trade volume</small></div>
@@ -371,7 +371,7 @@ function MarketAdmin() {
 export function AdminPanel() {
   const { setModal } = useApp();
   const [tab, setTab] = useState('overview');
-  const tabs = [['overview', '📊 Overview'], ['users', '👥 Users'], ['chats', '💬 Chats'], ['gifts', '🎁 Gifts'], ['market', '🔷 Market & MSG'], ['reports', '🚩 Reports'], ['settings', '⚙️ Access'], ['announce', '📣 Announce & log']];
+  const tabs = [['overview', '📊 Overview'], ['users', '👥 Users'], ['chats', '💬 Chats'], ['gifts', '🎁 Gifts'], ['market', 'M Market & MSG'], ['reports', '🚩 Reports'], ['settings', '⚙️ Access'], ['announce', '📣 Announce & log']];
   return (
     <Modal title="🛡 Admin panel" onClose={() => setModal(null)} wide>
       <div className="admin-tabs" role="tablist">
