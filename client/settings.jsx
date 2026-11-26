@@ -385,6 +385,8 @@ function AppearancePage({ back }) {
         <Toggle label="Gradient bubbles" hint="Your messages get a soft accent gradient" checked={s.gradBubbles} onChange={(gradBubbles) => updateSettings({ gradBubbles })} />
 
         <h4>Personal look</h4>
+        <small className="muted">Message time format</small>
+        <Segmented label="Message time format" value={s.timeFormat || '24'} onChange={(timeFormat) => updateSettings({ timeFormat })} options={[{ id: '24', name: '24-hour (18:45)' }, { id: '12', name: '12-hour (6:45 PM)' }]} />
         <small className="muted">Font</small>
         <Segmented label="Font" value={s.font} onChange={(font) => updateSettings({ font })}
           options={[{ id: 'inter', name: 'Sans' }, { id: 'serif', name: 'Serif' }, { id: 'round', name: 'Rounded' }, { id: 'mono', name: 'Mono' }]} />
