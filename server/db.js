@@ -135,6 +135,10 @@ addColumn('users', 'ghost', 'INTEGER NOT NULL DEFAULT 0');
 // what a member has *publicly* read (ghost mode keeps this behind last_read_id)
 addColumn('members', 'shown_read_id', 'INTEGER NOT NULL DEFAULT 0', 'UPDATE members SET shown_read_id = last_read_id');
 addColumn('gifts', 'token', 'TEXT');
+addColumn('gifts', 'favorite', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('gifts', 'hidden', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('gifts', 'sold_at', 'INTEGER');
+addColumn('gifts', 'sold_price', 'INTEGER');
 addColumn('users', 'status_emoji', "TEXT NOT NULL DEFAULT ''");
 addColumn('users', 'cover', "TEXT NOT NULL DEFAULT ''");        // JSON {g, e, f}: gradient index, pattern emoji, own photo
 addColumn('users', 'music_file', 'TEXT');
