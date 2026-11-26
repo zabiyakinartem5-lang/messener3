@@ -25,7 +25,10 @@ const isPremium = (u) => !!u && u.premium_until > Date.now();
 const premiumPrice = () => Math.max(1, Number(getSetting('premium_price', PREMIUM.defaultPrice)) || PREMIUM.defaultPrice);
 const giftPriceFor = (u, base) => (isPremium(u) ? Math.ceil(base * (100 - PREMIUM.discountPct) / 100) : base);
 // Charge Stars and count them towards the level; tells the person when they reach a new level.
-function spendMsgBalance(userId, amount) {\n  db.prepare('UPDATE users SET msg_balance=msg_balance-? WHERE id=? AND msg_balance>=?').run(amount, userId, amount);\n}\nfunction spend(userId, amount) {
+function spendMsgBalance(userId, amount) {
+  db.prepare('UPDATE users SET msg_balance=msg_balance-? WHERE id=? AND msg_balance>=?').run(amount, userId, amount);
+}
+function spend(userId, amount) {
   const before = levelOf(getUser(userId).stars_spent).n;
   db.prepare('UPDATE users SET stars=stars-?, stars_spent=stars_spent+? WHERE id=?').run(amount, amount, userId);
   const after = levelOf(getUser(userId).stars_spent);
