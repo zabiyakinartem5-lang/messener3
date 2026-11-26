@@ -366,6 +366,8 @@ function AppearancePage({ back }) {
           <div className="msg-row"><div className="bubble"><div className="text">Good morning! 👋</div><div className="meta"><span>9:41</span></div></div></div>
           <div className="msg-row mine"><div className="bubble"><div className="text">Theme, accent colour, wallpaper and text size change live.</div><div className="meta"><span>9:42</span><span className="ticks read">✓✓</span></div></div></div>
         </div>
+        <h4>Seasonal mode</h4>
+        <WinterModeToggle />
 
         <h4>Color theme</h4>
         <Segmented label="Color theme" value={s.theme} onChange={(theme) => updateSettings({ theme })}
@@ -436,7 +438,6 @@ function AppearancePage({ back }) {
         <input className="range" type="range" min={4} max={22} step={1} value={s.radius} aria-label="Message corner radius" onChange={(e) => updateSettings({ radius: Number(e.target.value) })} />
 
         <h4>Effects</h4>
-        <WinterModeToggle />
         <Toggle label="Animations" hint="Message, gift and screen transitions" checked={s.motion} onChange={(motion) => updateSettings({ motion })} />
         <Toggle label="Large emoji" hint="Show messages that are only emoji big, with a pop animation" checked={s.bigEmoji} onChange={(bigEmoji) => updateSettings({ bigEmoji })} />
         <button className="link" onClick={() => { clearCustomWallpaper(); setCustom(null); updateSettings({ ...DEFAULTS, sound: s.sound, notify: s.notify, keepDeleted: s.keepDeleted, wpRev: Date.now() }); }}>Reset appearance</button>
