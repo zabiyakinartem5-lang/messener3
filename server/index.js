@@ -822,6 +822,25 @@ route('POST', '/api/gifts/self', ({ user, body }) => {
   return { status: 201, data: { gift: giftView(giftId), stars: getUser(user.id).stars } };
 });
 
+function rollUniqueGiftAttributes(slug, tier) {
+  const rows = db.prepare('SELECT attrs FROM gifts WHERE upgraded=1 AND attrs IS NOT NULL').all();
+  const used = new Set();
+  for (const row of rows) {
+    try {
+      const a = JSON.parse(row.attrs);
+      used.add([a.model?.emoji, a.model?.name, a.backdrop?.name, a.pattern?.name, a.finish?.name].join('|'));
+    } catch {}
+  }
+  // Each collectible gets a distinct visual combination across the whole app.
+  // The combination includes object/model, background, pattern and finish.
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const attrs = rollAttributes(slug, tier);
+    const key = [attrs.model?.emoji, attrs.model?.name, attrs.backdrop?.name, attrs.pattern?.name, attrs.finish?.name].join('|');
+    if (!used.has(key)) return attrs;
+  }
+  throw new HttpError(409, 'Could not create a unique collectible. Please try again.');
+}
+
 function refreshGiftMessage(gift) {
   if (!gift.message_id) return;
   const m = db.prepare('SELECT * FROM messages WHERE id=?').get(gift.message_id);
@@ -840,7 +859,7 @@ route('POST', '/api/gifts/:id/upgrade', ({ user, params }) => {
     spend(user.id, t.upgrade_price);
     const no = db.prepare('SELECT COUNT(*) AS n FROM gifts WHERE type_id=? AND upgraded=1').get(t.id).n + 1;
     db.prepare('UPDATE gifts SET upgraded=1, collectible_no=?, attrs=?, token=? WHERE id=?')
-      .run(no, JSON.stringify(rollAttributes(t.slug, tierOf(t))), crypto.randomBytes(8).toString('hex'), g.id);
+      .run(no, JSON.stringify(rollUniqueGiftAttributes(t.slug, tierOf(t))), crypto.randomBytes(8).toString('hex'), g.id);
     db.prepare("INSERT INTO gift_events (gift_id,kind,from_id,to_id,created_at) VALUES (?,?,?,?,?)").run(g.id, 'upgraded', user.id, user.id, now());
     return db.prepare('SELECT * FROM gifts WHERE id=?').get(g.id);
   });
