@@ -93,30 +93,33 @@ function Greeting() {
   );
 }
 
-function ChatRow({ c, active, onClick }) {
+function ChatRow({ c, active, onClick, pinned, onTogglePin }) {
   const { me, typing } = useApp();
   const m = c.lastMessage;
   const t = typing[c.id];
   let sub = preview(m);
   if (m && c.type !== 'private' && m.kind !== 'system' && !m.deleted) sub = (m.sender.id === me.id ? 'You' : m.sender.displayName.split(' ')[0]) + ': ' + sub;
   return (
-    <button className={'chat-row' + (active ? ' active' : '')} onClick={onClick}>
-      <div className="av-wrap">
-        <Avatar name={c.title || '?'} color={chatColor(c)} src={c.peer?.avatar} />
-        {c.peer?.online && <span className="dot" />}
-      </div>
-      <div className="chat-main">
-        <div className="chat-top">
-          <span className="chat-title">{c.type === 'channel' ? '📢 ' : c.type === 'group' ? '👥 ' : ''}{c.type === 'private' && c.peer ? nameFor(me, c.peer) : c.title}{c.peer?.isBot && <span className="bot-tag">bot</span>}{c.peer?.statusEmoji && <span className="status-emoji">{c.peer.statusEmoji}</span>}</span>
-          <span className="chat-time">{m ? shortDate(m.createdAt) : ''}</span>
+    <div className="chat-row-wrap">
+      <button className={'chat-row' + (active ? ' active' : '')} onClick={onClick}>
+        <div className="av-wrap">
+          <Avatar name={c.title || '?'} color={chatColor(c)} src={c.peer?.avatar} />
+          {c.peer?.online && <span className="dot" />}
         </div>
-        <div className="chat-bottom">
-          <span className={'chat-sub' + (t ? ' typing' : '')}>{t ? <>{c.type === 'private' ? 'typing' : t.name + ' is typing'}<TypingDots /></> : sub}</span>
-          {m && m.sender.id === me.id && c.type === 'private' && !t && <span className={'ticks' + (c.peerRead >= m.id ? ' read' : '')}>{c.peerRead >= m.id ? '✓✓' : '✓'}</span>}
-          {c.unread > 0 && <span className="badge">{c.unread}</span>}
+        <div className="chat-main">
+          <div className="chat-top">
+            <span className="chat-title">{pinned && <span title="Pinned">📌 </span>}{c.type === 'channel' ? '📢 ' : c.type === 'group' ? '👥 ' : ''}{c.type === 'private' && c.peer ? nameFor(me, c.peer) : c.title}{c.peer?.isBot && <span className="bot-tag">bot</span>}{c.peer?.statusEmoji && <span className="status-emoji">{c.peer.statusEmoji}</span>}</span>
+            <span className="chat-time">{m ? shortDate(m.createdAt) : ''}</span>
+          </div>
+          <div className="chat-bottom">
+            <span className={'chat-sub' + (t ? ' typing' : '')}>{t ? <>{c.type === 'private' ? 'typing' : t.name + ' is typing'}<TypingDots /></> : sub}</span>
+            {m && m.sender.id === me.id && c.type === 'private' && !t && <span className={'ticks' + (c.peerRead >= m.id ? ' read' : '')}>{c.peerRead >= m.id ? '✓✓' : '✓'}</span>}
+            {c.unread > 0 && <span className="badge">{c.unread}</span>}
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+      <button className={'chat-pin' + (pinned ? ' on' : '')} onClick={onTogglePin} title={pinned ? 'Unpin chat' : 'Pin chat'} aria-label={pinned ? 'Unpin chat' : 'Pin chat'}>{pinned ? '📌' : '＋'}</button>
+    </div>
   );
 }
 
@@ -153,9 +156,15 @@ function Sidebar() {
   const [q, setQ] = useState('');
   const [menu, setMenu] = useState(false);
   const [filter, setFilter] = useState('all');
-  const FILTERS = [['all', 'All'], ['unread', 'Unread'], ['people', 'People'], ['groups', 'Groups'], ['channels', 'Channels']];
-  const matches = (c, f) => f === 'all' || (f === 'unread' && c.unread > 0) || (f === 'people' && c.type === 'private') || (f === 'groups' && c.type === 'group') || (f === 'channels' && c.type === 'channel');
-  const shownChats = chats.filter((c) => matches(c, filter));
+  const [pinned, setPinned] = useState(() => { try { return JSON.parse(localStorage.getItem('messenger-pinned-chats') || '[]'); } catch { return []; } });
+  const togglePin = (id) => setPinned((prev) => {
+    const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    try { localStorage.setItem('messenger-pinned-chats', JSON.stringify(next)); } catch {}
+    return next;
+  });
+  const FILTERS = [['all', 'All'], ['pinned', '📌 Pinned'], ['unread', 'Unread'], ['people', 'People'], ['groups', 'Groups'], ['channels', 'Channels']];
+  const matches = (c, f) => f === 'all' || (f === 'pinned' && pinned.includes(c.id)) || (f === 'unread' && c.unread > 0) || (f === 'people' && c.type === 'private') || (f === 'groups' && c.type === 'group') || (f === 'channels' && c.type === 'channel');
+  const shownChats = chats.filter((c) => matches(c, filter)).sort((a, b) => Number(pinned.includes(b.id)) - Number(pinned.includes(a.id)));
   return (
     <aside className="sidebar">
       <div className="side-head">
@@ -197,7 +206,7 @@ function Sidebar() {
         {q.trim() ? (
           <SearchResults q={q.trim()} onOpenUser={(u) => { setQ(''); openPrivate(u.id); }} onOpenChat={(c) => { setQ(''); joinChat(c.id); }} />
         ) : chats.length ? (
-          shownChats.length ? shownChats.map((c) => <ChatRow key={c.id} c={c} active={c.id === activeId} onClick={() => openChat(c.id)} />) : <div className="empty-note">Nothing here.</div>
+          shownChats.length ? shownChats.map((c) => <ChatRow key={c.id} c={c} active={c.id === activeId} pinned={pinned.includes(c.id)} onTogglePin={() => togglePin(c.id)} onClick={() => openChat(c.id)} />) : <div className="empty-note">Nothing here.</div>
         ) : (
           <div className="empty-note">No chats yet.<br />Search for a username to start one, or create a group.</div>
         )}
