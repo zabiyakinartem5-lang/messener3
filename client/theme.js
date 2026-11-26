@@ -55,7 +55,7 @@ export const SKINS = [
 ];
 
 export const DEFAULTS = {
-  font: 'inter', corners: 'normal', density: 'cozy', greeting: true,
+  font: 'inter', corners: 'normal', density: 'cozy', greeting: true, timeFormat: '24',
   skin: 'default',
   gradBubbles: true,
   theme: 'system', // light | dark | system
