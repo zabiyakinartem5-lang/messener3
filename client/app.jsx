@@ -1038,6 +1038,7 @@ function App() {
         } else if (e.type === 'chat:refresh') { refreshChats(); if (activeRef.current === e.chatId) loadMessages(e.chatId).catch(() => {}); }
         else if (e.type === 'announce') setAnnounce(e.text);
         else if (e.type === 'stars') { setMe((cur) => (cur ? { ...cur, stars: e.stars } : cur)); api('GET', '/me').then(setMe).catch(() => {}); }
+        else if (e.type === 'wallet:refresh') { api('GET', '/me').then(setMe).catch(() => {}); }
         else if (e.type === 'level') { api('GET', '/me').then(setMe).catch(() => {}); toast(`${e.icon} New level: ${e.level} · ${e.title}!`); }
         else if (e.type === 'chat:removed') { setChats((cs) => cs.filter((c) => c.id !== e.chatId)); if (activeRef.current === e.chatId) setActiveId(null); }
         else if (e.type === 'gift:received') { toast(`You received ${e.gift.type.name} from ${e.gift.sender.displayName}`); mergeGift(e.gift); }
