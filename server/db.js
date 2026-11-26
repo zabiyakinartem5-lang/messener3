@@ -325,6 +325,30 @@ db.exec(`CREATE TABLE IF NOT EXISTS nicks (
 // Lucky wheel + achievements
 addColumn('users', 'wheel_at', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('users', 'wheel_spins', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('users', 'msg_balance', 'INTEGER NOT NULL DEFAULT 0');
+db.exec(`
+CREATE TABLE IF NOT EXISTS market_listings (
+  id INTEGER PRIMARY KEY,
+  gift_id INTEGER NOT NULL UNIQUE REFERENCES gifts(id) ON DELETE CASCADE,
+  seller_id INTEGER NOT NULL REFERENCES users(id),
+  price INTEGER NOT NULL CHECK (price > 0),
+  created_at INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','sold','cancelled','removed')),
+  buyer_id INTEGER REFERENCES users(id),
+  closed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_market_active ON market_listings(status, created_at DESC);
+CREATE TABLE IF NOT EXISTS market_sales (
+  id INTEGER PRIMARY KEY,
+  listing_id INTEGER NOT NULL,
+  gift_id INTEGER NOT NULL,
+  seller_id INTEGER NOT NULL,
+  buyer_id INTEGER NOT NULL,
+  price INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_market_sales_time ON market_sales(created_at DESC);
+`);
 db.exec(`CREATE TABLE IF NOT EXISTS ach_claims (
   user_id INTEGER NOT NULL, ach_id TEXT NOT NULL, created_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, ach_id)
