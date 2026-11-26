@@ -380,7 +380,8 @@ export function AdminPanel() {
         {tab === 'overview' && <Overview />}
         {tab === 'users' && <Users />}
         {tab === 'chats' && <ChatsTab />}
-        {tab === 'gifts' && <GiftsTab />}\n        {tab === 'market' && <MarketAdmin />}
+        {tab === 'gifts' && <GiftsTab />}
+        {tab === 'market' && <MarketAdmin />}
         {tab === 'reports' && <ReportsTab />}
         {tab === 'settings' && <SettingsTab />}
         {tab === 'announce' && <Announce />}
