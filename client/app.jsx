@@ -47,7 +47,7 @@ function Auth({ onAuth }) {
         <p>Chat, collect and show off — all in one place.</p>
         <ul>
           <li><b>💬</b> Chats, groups and channels</li>
-          <li><b>🧊</b> Collectible gifts you can spin in 3D</li>
+          <li><b>🧊</b> Collectible gifts with unique styles</li>
           <li><b>🤖</b> A built-in AI assistant</li>
           <li><b>🎨</b> Themes, profile looks and your own style</li>
         </ul>
