@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api, upload } from './api.js';
 import { useApp } from './ctx.js';
-import { Avatar, Switch, Collection, CoverDeco, GiftCard, LevelBadge, LevelBar } from './ui.jsx';
+import { Avatar, Switch, Collection, CoverDeco, GiftCard, LevelBadge, LevelBar, giftRarity } from './ui.jsx';
 import { beep, burst } from './fx.js';
 import { ACCENTS, SKINS, WALLPAPERS, DEFAULTS, getCustomWallpaper, setCustomWallpaper, clearCustomWallpaper } from './theme.js';
 import { keptCount, clearKept } from './kept.js';
@@ -667,6 +667,25 @@ function PremiumPage({ back }) {
   );
 }
 
+function GiftUpgradeStudio({ back }) {
+  const { me, setModal } = useApp();
+  const [gifts, setGifts] = useState(null);
+  const [filter, setFilter] = useState('upgrade');
+  useEffect(() => { api('GET', `/users/${me.id}/gifts`).then(setGifts).catch(() => setGifts([])); }, [me.id]);
+  const list = (gifts || []).filter((g) => filter === 'upgrade' ? g.canUpgrade : g.upgraded);
+  return (
+    <>
+      <Header title="Gift Upgrade Studio" onBack={back} />
+      <div className="s-body upgrade-studio">
+        <div className="upgrade-hero"><div className="upgrade-orbit">✦</div><span className="eyebrow">COLLECTOR'S WORKSHOP</span><h2>Forge your rarity.</h2><p>Turn eligible gifts into one-of-a-kind collectibles. Every upgrade rolls a unique combination of model, backdrop, pattern and finish.</p><b>⭐ {me.stars} available</b></div>
+        <div className="upgrade-tabs"><button className={filter === 'upgrade' ? 'on' : ''} onClick={() => setFilter('upgrade')}>Ready to upgrade</button><button className={filter === 'owned' ? 'on' : ''} onClick={() => setFilter('owned')}>My collectibles</button></div>
+        {!gifts ? <div className="muted">Loading collection…</div> : !list.length ? <div className="upgrade-empty">{filter === 'upgrade' ? 'No gifts ready for upgrading yet. Buy or receive an eligible limited gift first.' : 'Your upgraded collectibles will appear here.'}</div> : <div className="collection upgrade-collection">{list.map((g) => <button key={g.id} className="upgrade-piece" onClick={() => setModal({ t: 'gift', gift: g })}><GiftCard gift={g} />{g.upgraded ? <small className={'studio-rarity rarity-' + (giftRarity(g)?.id || 'common')}>{giftRarity(g)?.icon} {giftRarity(g)?.label}</small> : <small className="studio-ready">✨ READY · ⭐ {g.upgradePrice}</small>}<span>Open details →</span></button>)}</div>}
+        <div className="rarity-guide"><b>Rarity ladder</b><div><span className="rarity-rare">💎 RARE</span><span className="rarity-epic">💜 EPIC</span><span className="rarity-legendary">👑 LEGENDARY</span><span className="rarity-mythic">🌌 MYTHIC</span></div><small>Based on the rarest trait rolled on your collectible.</small></div>
+      </div>
+    </>
+  );
+}
+
 function GiftsPage({ back }) {
   const { me, setMe, toast, setModal, closeSettings } = useApp();
   const [err, setErr] = useState('');
@@ -687,6 +706,7 @@ function GiftsPage({ back }) {
         <button className="prem-banner" onClick={() => back('premium')}>{me.premiumUntil > Date.now() ? '✨ Premium active' : '✨ Get Premium'}<small>daily ×2 · −10% gifts · 5 pins</small></button>
         <p className="muted">Send gifts with the 🎁 button in any private chat, or buy one for yourself. Limited gifts can be upgraded into unique collectibles and transferred.</p>
         <button className="primary" onClick={() => setModal({ t: 'shop', self: true })}>🎁 Buy a gift for myself</button>
+        <button className="upgrade-studio-launch" onClick={() => back('upgrade-studio')}><span>✨</span><b>Open Gift Upgrade Studio</b><small>Rarity rolls · unique collectibles · collection</small><i>→</i></button>
         <h4>My gifts</h4>
         <Collection userId={me.id} />
       </div>
@@ -710,6 +730,7 @@ export function SettingsPanel() {
         {page === 'privacy' && <PrivacyPage back={back} />}
         {page === 'contacts' && <ContactsPage back={back} />}
         {page === 'gifts' && <GiftsPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
+        {page === 'upgrade-studio' && <GiftUpgradeStudio back={() => setPage('gifts')} />}
         {page === 'premium' && <PremiumPage back={() => setPage('gifts')} />}
         {page === 'rewards' && <RewardsPage back={back} />}
         {page === 'main' && (
