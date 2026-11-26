@@ -855,7 +855,7 @@ html[data-winter="on"] .sidebar.settings { border-color: color-mix(in srgb, #d8a
 .chat-row.active + .chat-pin { color: var(--accent); }
 
 /* Black glass gift presentation and collector rarity system */
-.gift-card { background-color:#050507 !important; background-image:linear-gradient(160deg,rgba(255,255,255,.06),rgba(0,0,0,.72)) !important; border:1px solid rgba(255,255,255,.13); color:#fff !important; box-shadow:inset 0 0 28px rgba(0,0,0,.5),0 8px 22px rgba(0,0,0,.22); }
+.gift-card { background-color:#050507 !important; border:1px solid rgba(255,255,255,.13); color:#fff !important; box-shadow:inset 0 0 28px rgba(0,0,0,.5),0 8px 22px rgba(0,0,0,.22); }
 .gift-card.upgraded { background-blend-mode:screen,normal; }
 .gift-rarity { position:absolute; top:8px; left:8px; z-index:3; padding:4px 8px; border-radius:99px; background:rgba(0,0,0,.72); border:1px solid currentColor; font-size:9px; font-weight:900; letter-spacing:.09em; }
 .rarity-rare { color:#55c9ff !important; }.rarity-epic { color:#c28aff !important; }.rarity-legendary { color:#ffc45c !important; }.rarity-mythic { color:#ff7bd5 !important; }.rarity-common { color:#c6cbd4 !important; }
