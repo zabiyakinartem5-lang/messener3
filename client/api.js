@@ -44,7 +44,14 @@ export async function upload(file) {
 export const initials = (name = '?') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?';
 
-export const timeOf = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+export const timeOf = (ts) => {
+  let hour12 = false;
+  try {
+    const saved = JSON.parse(localStorage.getItem('settings') || '{}');
+    hour12 = saved.timeFormat === '12';
+  } catch { /* use 24-hour time */ }
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 });
+};
 
 export function shortDate(ts) {
   const d = new Date(ts), n = new Date();
