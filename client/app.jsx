@@ -302,7 +302,25 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
   const [emoji, setEmoji] = useState(false);
   const { setModal } = useApp();
 
-  useEffect(() => { setText(editing ? editing.text : ''); ta.current?.focus(); }, [editing, chat.id]);
+  const draftKey = 'messenger-draft:' + chat.id;
+  function changeText(value) {
+    setText(value);
+    if (!editing) {
+      try { value ? localStorage.setItem(draftKey, value.slice(0, 12000)) : localStorage.removeItem(draftKey); } catch { /* drafts are device-local */ }
+    }
+  }
+  function clearDraft() {
+    try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+  }
+  useEffect(() => {
+    if (editing) setText(editing.text);
+    else {
+      let draft = '';
+      try { draft = localStorage.getItem(draftKey) || ''; } catch { /* ignore */ }
+      setText(draft);
+    }
+    ta.current?.focus();
+  }, [editing, chat.id]);
   useEffect(() => {
     if (!ta.current) return;
     ta.current.style.height = 'auto';
@@ -318,7 +336,7 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
     const t = text.trim();
     if (!t || busy) return;
     setBusy(true); setErr('');
-    try { await onSend({ text: t }); setText(''); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+    try { await onSend({ text: t }); setText(''); if (!editing) clearDraft(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
   async function pick(e) {
     const f = e.target.files?.[0];
@@ -328,7 +346,7 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
     try {
       const up = await upload(f);
       await onSend({ text: text.trim(), fileId: up.id });
-      setText('');
+      setText(''); clearDraft();
     } catch (x) { setErr(x.message); } finally { setBusy(false); }
   }
   async function startRec() {
@@ -388,13 +406,13 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
             {emoji && (
               <EmojiPicker onClose={() => setEmoji(false)} onPick={(e) => {
                 const el = ta.current; const a = el?.selectionStart ?? text.length; const b = el?.selectionEnd ?? text.length;
-                setText(text.slice(0, a) + e + text.slice(b));
+                changeText(text.slice(0, a) + e + text.slice(b));
                 requestAnimationFrame(() => { if (el) { el.focus(); el.selectionStart = el.selectionEnd = a + e.length; } });
               }} />
             )}
             <textarea
               ref={ta} rows={1} value={text} placeholder={chat.peer?.isBot ? 'Ask the assistant anything (/new = fresh chat)' : 'Message'} aria-label="Message"
-              onChange={(e) => { setText(e.target.value); onTyping(); }}
+              onChange={(e) => { changeText(e.target.value); onTyping(); }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
                 if (e.key === 'Escape' && (replyTo || editing)) onCancel();
