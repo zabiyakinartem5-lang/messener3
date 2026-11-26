@@ -872,3 +872,23 @@ html[data-winter="on"] .sidebar.settings { border-color: color-mix(in srgb, #d8a
 .gift-vault{margin-top:12px}.gift-vault-head{display:flex;justify-content:space-between;align-items:center;margin:8px 0}.gift-vault-head small,.gift-vault-note{color:var(--muted);font-size:11px}
 .gift-vault-tabs{display:flex;gap:6px;overflow:auto;margin:8px 0 12px}.gift-vault-tabs button{flex:1;white-space:nowrap;padding:8px 10px;border-radius:10px;background:var(--panel);color:var(--muted);font-size:12px}.gift-vault-tabs button.on{background:color-mix(in srgb,var(--accent) 18%,var(--panel));color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .gift-vault-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}.gift-vault-item{min-width:0;padding:7px;border-radius:14px;background:color-mix(in srgb,var(--panel) 88%,#000);border:1px solid var(--line)}.gift-vault-open{display:block;width:100%;background:none;padding:0}.gift-vault-open .gift-card{width:100%}.gift-vault-actions{display:flex;align-items:center;gap:4px;margin-top:7px}.gift-vault-actions button{min-width:27px;padding:5px 6px;border-radius:8px;background:var(--panel);color:var(--muted);font-size:12px}.gift-vault-actions button.active{color:#ff5d8f}.gift-vault-actions button.sell{flex:1;color:#f0c56d;background:#2b2414}.gift-vault-actions button:disabled{opacity:.45}
+
+
+/* MSG crystal wallet and player-to-player gift market */
+.msg-pill{border-radius:99px;padding:6px 11px;color:#e8f7ff;font-weight:850;background:linear-gradient(135deg,#168eea,#3155d9 60%,#7048d8);box-shadow:0 4px 16px -5px #278fff;white-space:nowrap}
+.msg-wallet-hero{display:flex;flex-direction:column;align-items:center;gap:5px;padding:22px 14px;margin:4px 0 14px;border-radius:20px;color:#eaf8ff;background:radial-gradient(circle at 50% 15%,#287fbd55,transparent 48%),linear-gradient(145deg,#071a31,#0b1026 72%,#17123a);border:1px solid #3d9dff55;box-shadow:inset 0 0 34px #1678c522,0 12px 30px -18px #168fff}
+.msg-wallet-hero>small{font-size:10px;letter-spacing:.16em;color:#8dcfff;font-weight:900}.msg-wallet-hero>b{font-size:29px;letter-spacing:-.04em;text-shadow:0 0 18px #43aaff88}.msg-wallet-hero>span{font-size:11px;color:#91a9c8}
+.msg-crystal{position:relative;width:74px;height:82px;margin-bottom:8px;display:grid;place-items:center;filter:drop-shadow(0 0 12px #24aaffaa);animation:msgFloat 3.6s ease-in-out infinite}
+.msg-crystal:before{content:"";width:58px;height:68px;clip-path:polygon(25% 0,75% 0,100% 32%,50% 100%,0 32%);background:linear-gradient(135deg,#c7f5ff 0%,#43c4ff 22%,#1678e8 55%,#8a7aff 100%);border:1px solid #d9f8ff;box-shadow:inset -9px -8px 15px #051e70aa,inset 8px 5px 14px #fff9}
+.msg-crystal:after{content:"";position:absolute;inset:10px 18px 20px 18px;clip-path:polygon(0 0,100% 0,50% 100%);background:linear-gradient(120deg,#fff9,transparent 65%);opacity:.9}
+.msg-crystal i{position:absolute;width:5px;height:5px;border-radius:50%;background:#fff;box-shadow:0 0 12px 4px #78d9ff;top:3px;right:8px;animation:msgSpark 2.4s ease-in-out infinite}
+@keyframes msgFloat{50%{transform:translateY(-7px) rotate(3deg)}}@keyframes msgSpark{50%{opacity:.2;transform:scale(.5)}}
+.msg-note{display:flex;gap:9px;padding:12px;margin-top:14px;border-radius:12px;background:color-mix(in srgb,#299cff 10%,var(--panel));color:var(--muted);font-size:12px;line-height:1.5}
+.market-wallet{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;margin-bottom:10px;border-radius:12px;background:linear-gradient(110deg,#0b2039,#17163a);color:#d9f2ff;font-weight:850}
+.market-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:10px}
+.market-item{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;padding:12px 9px;border:1px solid var(--line);border-radius:14px;background:var(--panel);text-align:center}
+.market-gift{display:grid;place-items:center;width:68px;height:68px;border-radius:16px;background:radial-gradient(circle,#2d8cdb44,transparent 70%),#080f20;font-size:38px}
+.market-item>b{font-size:13px}.market-item>small{font-size:10px;color:var(--muted)}.market-item .primary{width:100%;margin-top:4px}
+.msg-price{color:#45aef7;font-size:12px}.market-list-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}.market-list-row span{flex:1}.market-list-row b{color:#45aef7}
+.market-history>div{display:flex;flex-direction:column;gap:3px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}.market-history small{color:var(--muted)}
+@media(prefers-reduced-motion:reduce){.msg-crystal,.msg-crystal i{animation:none}}
