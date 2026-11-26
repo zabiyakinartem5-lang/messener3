@@ -892,3 +892,15 @@ html[data-winter="on"] .sidebar.settings { border-color: color-mix(in srgb, #d8a
 .msg-price{color:#45aef7;font-size:12px}.market-list-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}.market-list-row span{flex:1}.market-list-row b{color:#45aef7}
 .market-history>div{display:flex;flex-direction:column;gap:3px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}.market-history small{color:var(--muted)}
 @media(prefers-reduced-motion:reduce){.msg-crystal,.msg-crystal i{animation:none}}
+
+/* MSG identity: a simple, flat monogram instead of a stock-looking crystal */
+.msg-mark{display:inline-flex;align-items:center;justify-content:center;vertical-align:-2px;flex:0 0 auto;width:18px;height:18px;margin-right:4px;clip-path:polygon(18% 0,82% 0,100% 50%,82% 100%,18% 100%,0 50%);background:#176fc1;color:#f4fbff;font-size:11px;line-height:1;font-weight:950;letter-spacing:-.08em;font-family:Arial,sans-serif;text-shadow:none;box-shadow:none}
+.msg-mark-large{width:68px;height:68px;margin:0 0 8px;font-size:39px;letter-spacing:-.12em;background:linear-gradient(145deg,#258bd1 0%,#14539c 100%);border:0;filter:none;animation:none}
+.msg-pill{display:inline-flex;align-items:center;gap:2px;background:#102d4c;border:1px solid #28699e;box-shadow:none;color:#dceeff}
+.msg-wallet-hero{background:linear-gradient(145deg,#101f32,#0b1525);border-color:#294b69;box-shadow:none}
+.msg-wallet-hero>small{color:#9bbbd8}
+.msg-wallet-hero>b{text-shadow:none}
+.msg-crystal{animation:none;filter:none}
+.msg-crystal:before,.msg-crystal:after{display:none}
+.msg-crystal i{display:none}
+.msg-stat-mark{background:#176fc1;color:white;clip-path:polygon(18% 0,82% 0,100% 50%,82% 100%,18% 100%,0 50%);font-weight:950}
