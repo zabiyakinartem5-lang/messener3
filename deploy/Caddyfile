@@ -1,0 +1,8 @@
+# Caddy gets and renews the HTTPS certificate for {$DOMAIN} on its own. WebSockets work out of the box.
+{$DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 30MB
+	}
+	reverse_proxy app:3000
+}

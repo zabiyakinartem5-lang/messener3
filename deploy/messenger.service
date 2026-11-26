@@ -1,0 +1,25 @@
+# Without Docker: copy to /etc/systemd/system/messenger.service, edit the paths/user, then
+#   sudo systemctl daemon-reload && sudo systemctl enable --now messenger
+[Unit]
+Description=Messenger
+After=network.target
+
+[Service]
+Type=simple
+User=messenger
+WorkingDirectory=/opt/messenger
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+Environment=TRUST_PROXY=1
+Environment=AI_ENABLED=0
+Environment=APP_NAME=Messenger
+ExecStart=/usr/bin/node --no-warnings server/index.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/opt/messenger
+
+[Install]
+WantedBy=multi-user.target
