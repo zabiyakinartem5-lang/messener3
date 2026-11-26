@@ -250,6 +250,11 @@ const SEED = [
   ['infinity','Infinity',     '♾️', '#35d0c0', 1500, 60,  800],
   ['clock',   'Eternal Clock','🕰️', '#b08d57', 2000, 40,  1000],
   ['blackhole','Black Hole',  '🕳️', '#2b2b45', 2500, 25,  1200],
+  // cozy winter collection
+  ['hotcocoa', 'Hot Cocoa', '☕', '#b77a55', 35, null, 50],
+  ['snowglobe', 'Snow Globe', '🔮', '#8fcbe8', 180, 900, 140],
+  ['gingerbread', 'Gingerbread House', '🏠', '#c58a62', 220, 700, 170],
+  ['cozyblanket', 'Cozy Blanket', '🧣', '#b76e78', 260, 500, 190],
   // fifth batch: 3D models (spin them with a drag)
   ['teddy3d',   '3D Teddy',     '🧸', '#c98b5a', 80,  null, 80],
   ['robot3d',   '3D Robot',     '🤖', '#6f8fa8', 140, null, 110],
