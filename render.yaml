@@ -1,22 +1,16 @@
+
 services:
   - type: web
     name: messenger
     runtime: docker
-    plan: starter
+    plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
-    disk:
-      name: messenger-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATA_DIR
-        value: /data
-      - key: UPLOAD_DIR
-        value: /data/uploads
       - key: AI_ENABLED
         value: "0"
       - key: TRUST_PROXY
         value: "1"
+
