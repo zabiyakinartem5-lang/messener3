@@ -845,3 +845,11 @@ h1,h2,h3{letter-spacing:-.02em}
 .winter-toggle .winter-hint { display: block; margin-top: 4px; line-height: 1.4; }
 html[data-winter="on"] .chat-head,
 html[data-winter="on"] .sidebar.settings { border-color: color-mix(in srgb, #d8ae70 28%, var(--line)); }
+
+/* Pinned chats */
+.chat-row-wrap { display: flex; align-items: center; gap: 2px; }
+.chat-row-wrap > .chat-row { flex: 1; min-width: 0; }
+.chat-pin { width: 30px; height: 34px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 9px; color: var(--muted); opacity: .45; }
+.chat-row-wrap:hover .chat-pin, .chat-pin.on { opacity: 1; }
+.chat-pin:hover { background: var(--hover); }
+.chat-row.active + .chat-pin { color: var(--accent); }
