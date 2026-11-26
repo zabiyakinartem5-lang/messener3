@@ -169,7 +169,7 @@ export function GiftCard({ gift, big, reveal, spin }) {
     );
   }
   return (
-    <div className={'gift-card' + (big ? ' big' : '')} style={{ background: `linear-gradient(160deg, ${t.color}33, #050507 72%)` }}>
+    <div className={'gift-card' + (big ? ' big' : '')} style={{ background: `linear-gradient(160deg, #18181d, #050507 72%)` }}>
       {t.model3d ? <Model3D emoji={t.emoji} layers={big ? 14 : 6} gap={big ? 4 : 3} ry={spin?.ry} rx={spin?.rx} /> : <div className="gift-emoji">{t.emoji}</div>}
       <div className="gift-name">{t.name}</div>
       {t.limited && gift.serial && <div className="gift-sub">#{gift.serial} of {t.supply}</div>}
