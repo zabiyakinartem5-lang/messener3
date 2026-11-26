@@ -10,8 +10,6 @@
     '#cozy-winter-garland{position:fixed;z-index:31;pointer-events:none;top:0;left:0;width:100%;height:15px;opacity:.92;background:radial-gradient(circle,#ffe7a0 0 3px,rgba(255,174,83,.28) 4px,transparent 7px) 0 0/34px 15px repeat-x;filter:drop-shadow(0 1px 5px rgba(255,190,100,.45))}',
     '#cozy-winter-garland:before{content:"";position:absolute;left:0;right:0;top:1px;height:8px;border-top:1px solid rgba(255,224,160,.55);border-radius:50%}',
     'html[data-winter="on"] .sidebar,html[data-winter="on"] .chat-head{box-shadow:0 0 0 1px rgba(255,211,135,.10),0 10px 32px rgba(120,82,38,.08)}',
-    '.m3d-obj span:not(:last-child){display:none!important}.m3d-obj span:last-child{transform:none!important;filter:none!important}.m3d-shadow{display:none!important}',
-    '.spin-stage{pointer-events:none!important;touch-action:auto!important}.spin-card{transform:none!important}.spin-face.back,.spin-hint{display:none!important}',
     '@media(prefers-reduced-motion:reduce){#cozy-winter-snow span{animation:none!important;display:none}#cozy-winter-garland{opacity:.45}}'
   ].join('');
   document.head.appendChild(style);
