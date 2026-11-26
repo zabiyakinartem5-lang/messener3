@@ -739,6 +739,8 @@ function MsgPage({ back }) {
   const [amount, setAmount] = useState('100');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const rate = Number(me.msgRate) || 1;
+  const estimate = Math.floor((Number(amount) || 0) * rate);
   async function exchange() {
     const n = Number(amount);
     if (!Number.isSafeInteger(n) || n < 1 || n > me.stars) { setErr('Enter an amount within your Stars balance'); return; }
@@ -748,10 +750,10 @@ function MsgPage({ back }) {
   }
   return <><Header title="MSG Wallet" onBack={back} /><div className="s-body">
     <div className="msg-wallet-hero"><div className="msg-crystal" aria-hidden="true"><i /></div><small>YOUR MSG BALANCE</small><b>{(me.msg || 0).toLocaleString()} MSG</b><span>Blue crystal currency</span></div>
-    <div className="wallet"><div><small>Stars available</small><b>⭐ {me.stars.toLocaleString()}</b></div><div><small>Exchange rate</small><b>1 ⭐ = 1 MSG</b></div></div>
+    <div className="wallet"><div><small>Stars available</small><b>⭐ {me.stars.toLocaleString()}</b></div><div><small>Exchange rate</small><b>1 ⭐ = {rate} MSG</b></div></div>
     <h4>Exchange Stars for MSG</h4><p className="muted small">MSG is used to buy and sell gifts in the marketplace. Exchange is instant and cannot be reversed.</p>
     <input className="search" type="number" min="1" max={me.stars} value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Stars to exchange" />
-    <div className="row"><button className="primary" disabled={busy || !me.stars} onClick={exchange}>🔷 Exchange for MSG</button><button className="primary ghosty small" onClick={() => setAmount(String(me.stars))}>Max</button></div>
+    <div className="msg-note">You will receive approximately <b>{estimate.toLocaleString()} MSG</b></div><div className="row"><button className="primary" disabled={busy || !me.stars || estimate < 1} onClick={exchange}>🔷 Exchange for MSG</button><button className="primary ghosty small" onClick={() => setAmount(String(me.stars))}>Max</button></div>
     {err && <div className="error small" role="alert">{err}</div>}<div className="msg-note">💡 <span>List gifts you no longer need on the Market and earn MSG from other collectors.</span></div>
   </div></>;
 }
