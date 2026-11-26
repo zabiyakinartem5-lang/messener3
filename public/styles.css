@@ -893,14 +893,14 @@ html[data-winter="on"] .sidebar.settings { border-color: color-mix(in srgb, #d8a
 .market-history>div{display:flex;flex-direction:column;gap:3px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}.market-history small{color:var(--muted)}
 @media(prefers-reduced-motion:reduce){.msg-crystal,.msg-crystal i{animation:none}}
 
-/* MSG identity: a simple, flat monogram instead of a stock-looking crystal */
-.msg-mark{display:inline-flex;align-items:center;justify-content:center;vertical-align:-2px;flex:0 0 auto;width:18px;height:18px;margin-right:4px;clip-path:polygon(18% 0,82% 0,100% 50%,82% 100%,18% 100%,0 50%);background:#176fc1;color:#f4fbff;font-size:11px;line-height:1;font-weight:950;letter-spacing:-.08em;font-family:Arial,sans-serif;text-shadow:none;box-shadow:none}
-.msg-mark-large{width:68px;height:68px;margin:0 0 8px;font-size:39px;letter-spacing:-.12em;background:linear-gradient(145deg,#258bd1 0%,#14539c 100%);border:0;filter:none;animation:none}
+/* MSG identity: compact folded-corner monogram, kept deliberately flat */
+.msg-mark{position:relative;display:inline-flex;align-items:center;justify-content:center;vertical-align:-3px;flex:0 0 auto;width:19px;height:19px;margin-right:5px;border-radius:5px 5px 5px 2px;background:#176fc1;color:#f4fbff;font-family:Arial,sans-serif;font-size:12px;line-height:1;font-weight:900;letter-spacing:-.1em;padding-right:1px;box-shadow:inset 0 0 0 1px #ffffff20}
+.msg-mark:after{content:"";position:absolute;top:0;right:0;width:5px;height:5px;background:#78c9fa;clip-path:polygon(0 0,100% 0,100% 100%);border-radius:0 3px 0 0}
+.msg-mark-large{width:66px;height:66px;margin:0 0 8px;border-radius:16px 16px 16px 5px;background:#176fc1;font-size:42px;letter-spacing:-.12em;padding-right:4px;box-shadow:inset 0 0 0 1px #ffffff24}
+.msg-mark-large:after{width:17px;height:17px;border-radius:0 9px 0 0;background:#83d0ff}
 .msg-pill{display:inline-flex;align-items:center;gap:2px;background:#102d4c;border:1px solid #28699e;box-shadow:none;color:#dceeff}
 .msg-wallet-hero{background:linear-gradient(145deg,#101f32,#0b1525);border-color:#294b69;box-shadow:none}
 .msg-wallet-hero>small{color:#9bbbd8}
 .msg-wallet-hero>b{text-shadow:none}
-.msg-crystal{animation:none;filter:none}
-.msg-crystal:before,.msg-crystal:after{display:none}
-.msg-crystal i{display:none}
-.msg-stat-mark{background:#176fc1;color:white;clip-path:polygon(18% 0,82% 0,100% 50%,82% 100%,18% 100%,0 50%);font-weight:950}
+.msg-stat-mark{background:#176fc1;color:white;border-radius:5px 5px 5px 2px}
+.market-fee-note{margin:8px 0 12px;padding:9px 11px;border-left:2px solid #287fc1;background:color-mix(in srgb,#287fc1 8%,var(--panel));border-radius:0 9px 9px 0;color:var(--muted);font-size:11px;line-height:1.45}
