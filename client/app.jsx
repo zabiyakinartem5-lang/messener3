@@ -533,8 +533,8 @@ function GiftShop({ chatId, self, modal = {} }) {
     } catch (e) { setErr(e.message); setApiCatalog(); } finally { setBusy(false); }
   }
   const setApiCatalog = () => api('GET', '/gifts/catalog').then(setCat);
-  const everydayFeatured = new Set(['heart', 'teddy', 'rose', 'cake', 'coffee', 'snowflake', 'cookie']);
-  const visibleCatalog = cat.filter((g) => !g.model3d && (g.limited || everydayFeatured.has(g.slug)));
+  // Keep the full catalog; hide only the explicitly marked 3D gifts.
+  const visibleCatalog = cat.filter((g) => !g.model3d);
   const shown = visibleCatalog.filter((g) => tier === 'all' || g.rarity === tier).sort((a, b) =>
     sort === 'cheap' ? a.price - b.price : sort === 'rich' ? b.price - a.price : (TIER_ORDER.indexOf(a.rarity) - TIER_ORDER.indexOf(b.rarity)) || a.price - b.price);
   return (
