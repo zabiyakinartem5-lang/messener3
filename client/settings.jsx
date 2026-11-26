@@ -317,6 +317,26 @@ function AIPage({ back }) {
   );
 }
 
+function WinterModeToggle() {
+  const [enabled, setEnabled] = useState(() => {
+    try { return localStorage.getItem('messenger-winter-mode') === 'on'; } catch { return false; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.winter = enabled ? 'on' : 'off';
+    try { localStorage.setItem('messenger-winter-mode', enabled ? 'on' : 'off'); } catch {}
+    window.dispatchEvent(new Event('winter-mode-change'));
+  }, [enabled]);
+  return (
+    <div className="s-toggle winter-toggle">
+      <div>
+        <div className="winter-label">🎄 Уютный новогодний режим</div>
+        <small className="muted winter-hint">Снег, тёплые огоньки и зимняя атмосфера. Настройка действует только у тебя.</small>
+      </div>
+      <Switch checked={enabled} onChange={setEnabled} label="Уютный новогодний режим" />
+    </div>
+  );
+}
+
 function AppearancePage({ back }) {
   const { settings, updateSettings, toast } = useApp();
   const s = settings;
@@ -416,6 +436,7 @@ function AppearancePage({ back }) {
         <input className="range" type="range" min={4} max={22} step={1} value={s.radius} aria-label="Message corner radius" onChange={(e) => updateSettings({ radius: Number(e.target.value) })} />
 
         <h4>Effects</h4>
+        <WinterModeToggle />
         <Toggle label="Animations" hint="Message, gift and screen transitions" checked={s.motion} onChange={(motion) => updateSettings({ motion })} />
         <Toggle label="Large emoji" hint="Show messages that are only emoji big, with a pop animation" checked={s.bigEmoji} onChange={(bigEmoji) => updateSettings({ bigEmoji })} />
         <button className="link" onClick={() => { clearCustomWallpaper(); setCustom(null); updateSettings({ ...DEFAULTS, sound: s.sound, notify: s.notify, keepDeleted: s.keepDeleted, wpRev: Date.now() }); }}>Reset appearance</button>
