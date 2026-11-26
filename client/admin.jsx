@@ -351,11 +351,11 @@ function GiftsTab() {
 }
 
 function MarketAdmin() {
-  const { toast } = useApp();
+  const { toast, setMe } = useApp();
   const [data,setData] = useState(null); const [err,setErr] = useState(''); const [rate,setRate] = useState('1');
   async function load(){try{const d=await api('GET','/admin/market');setData(d);setRate(String(d.rate));}catch(e){setErr(e.message);}}
   useEffect(()=>{load();},[]);
-  async function saveRate(){try{const r=await api('POST','/admin/market/rate',{rate:Number(rate)});setRate(String(r.rate));toast('Exchange rate saved');load();}catch(e){setErr(e.message);}}
+  async function saveRate(){try{const r=await api('POST','/admin/market/rate',{rate:Number(rate)});setRate(String(r.rate));api('GET','/me').then(setMe).catch(()=>{});toast('Exchange rate saved');load();}catch(e){setErr(e.message);}}
   async function grant(){const id=prompt('User ID to receive MSG');if(id===null)return;const amount=prompt('How many MSG to grant?','100');if(amount===null)return;try{await api('POST','/admin/market/grant-msg',{userId:Number(id),amount:Number(amount)});toast('MSG granted');}catch(e){setErr(e.message);}}
   async function remove(item){if(!confirm('Remove this marketplace listing?'))return;try{await api('DELETE','/admin/market/listings/'+item.id);toast('Listing removed');load();}catch(e){setErr(e.message);}}
   if(!data)return <div className={err?'error':'muted'}>{err||'Loading…'}</div>;
