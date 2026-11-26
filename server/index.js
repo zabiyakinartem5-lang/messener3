@@ -850,7 +850,7 @@ route('GET', '/api/gifts/catalog', ({ user }) => {
 
 route('GET', '/api/users/:id/gifts', ({ user, params }) => {
   const id = intParam(params.id);
-  const ids = db.prepare('SELECT id FROM gifts WHERE owner_id=? AND sold_at IS NULL AND (hidden=0 OR owner_id=?) ORDER BY id DESC').all(id, user.id).map((r) => r.id);
+  const ids = db.prepare('SELECT id FROM gifts WHERE owner_id=? AND sold_at IS NULL AND (hidden=0 OR ?=1) ORDER BY id DESC').all(id, id === user.id ? 1 : 0).map((r) => r.id);
   return { data: ids.map(giftView) };
 });
 
