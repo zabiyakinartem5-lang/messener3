@@ -533,15 +533,17 @@ function GiftShop({ chatId, self, modal = {} }) {
     } catch (e) { setErr(e.message); setApiCatalog(); } finally { setBusy(false); }
   }
   const setApiCatalog = () => api('GET', '/gifts/catalog').then(setCat);
-  const shown = cat.filter((g) => tier === 'all' || (tier === '3d' ? g.model3d : g.rarity === tier)).sort((a, b) =>
+  const everydayFeatured = new Set(['heart', 'teddy', 'rose', 'cake', 'coffee', 'snowflake', 'cookie']);
+  const visibleCatalog = cat.filter((g) => !g.model3d && (g.limited || everydayFeatured.has(g.slug)));
+  const shown = visibleCatalog.filter((g) => tier === 'all' || g.rarity === tier).sort((a, b) =>
     sort === 'cheap' ? a.price - b.price : sort === 'rich' ? b.price - a.price : (TIER_ORDER.indexOf(a.rarity) - TIER_ORDER.indexOf(b.rarity)) || a.price - b.price);
   return (
     <Modal title={self ? 'Buy a gift for yourself' : 'Send a gift to ' + (chat?.title || '')} onClose={() => setModal(null)} wide>
       <div className="balance">Your balance: <b>⭐ {me.stars}</b></div>
       <div className="tier-chips" role="tablist" aria-label="Rarity">
-        {['all', ...TIER_ORDER, '3d'].map((t) => (
-          <button key={t} role="tab" aria-selected={tier === t} className={'tier-chip tier-' + (t === '3d' ? 'epic' : t) + (tier === t ? ' on' : '')} onClick={() => setTier(t)}>
-            {t === 'all' ? 'All' : t === '3d' ? '🧊 3D' : TIER_LABEL[t]} <small>{t === 'all' ? cat.length : t === '3d' ? cat.filter((g) => g.model3d).length : cat.filter((g) => g.rarity === t).length}</small>
+        {['all', ...TIER_ORDER].map((t) => (
+          <button key={t} role="tab" aria-selected={tier === t} className={'tier-chip tier-' + t + (tier === t ? ' on' : '')} onClick={() => setTier(t)}>
+            {t === 'all' ? 'All' : TIER_LABEL[t]} <small>{t === 'all' ? visibleCatalog.length : visibleCatalog.filter((g) => g.rarity === t).length}</small>
           </button>
         ))}
         <select className="tier-sort" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
@@ -558,7 +560,7 @@ function GiftShop({ chatId, self, modal = {} }) {
               return (
                 <button key={g.id} className={'shop-item tier-' + g.rarity + (sel?.id === g.id ? ' sel' : '')} disabled={out} onClick={() => setSel(g)}
                   style={{ background: `linear-gradient(160deg, ${g.color}40, ${g.color}15)` }}>
-                  <span className="tier-badge">{g.model3d ? '3D · ' : ''}{TIER_LABEL[g.rarity]}</span>
+                  <span className="tier-badge">{TIER_LABEL[g.rarity]}</span>
                   {g.limited && <span className="ribbon">NFT</span>}
                   <span className="e">{g.emoji}</span>
                   <b>{g.name}</b>
