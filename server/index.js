@@ -34,6 +34,7 @@ function spend(userId, amount) {
   const after = levelOf(getUser(userId).stars_spent);
   if (after.n > before) setTimeout(() => sendTo(userId, { type: 'level', level: after.n, title: after.title, icon: after.icon }), 50);
 }
+const msgExchangeRate = () => { const n = Number(getSetting('msg_exchange_rate', '1')); return Number.isFinite(n) && n > 0 ? n : 1; };
 const dailyBonus = () => Math.max(1, Number(getSetting('daily_bonus', 100)) || 100);
 const startStars = () => Math.max(0, Number(getSetting('start_stars', 500)) || 0);
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -93,7 +94,7 @@ const userView = (u) =>
     level: u.is_bot ? null : (({ n, title, icon }) => ({ n, title, icon }))(levelOf(u.stars_spent)), premium: isPremium(u),
   };
 const selfView = (u) => ({
-  ...userView(u), online: true, lastSeen: u.last_seen, stars: u.stars, msg: u.msg_balance || 0, lastDaily: u.last_daily, hideSeen: !!u.hide_seen, ghost: !!u.ghost,
+  ...userView(u), online: true, lastSeen: u.last_seen, stars: u.stars, msg: u.msg_balance || 0, msgRate: msgExchangeRate(), lastDaily: u.last_daily, hideSeen: !!u.hide_seen, ghost: !!u.ghost,
   aiPrompt: u.ai_prompt || '', aiModel: u.ai_model || '', isAdmin: !!u.is_admin,
   nameColor: u.name_color || '', nicks: Object.fromEntries(db.prepare('SELECT target_id, nick FROM nicks WHERE owner_id=?').all(u.id).map((r) => [r.target_id, r.nick])),
   starsSpent: u.stars_spent, levelInfo: levelOf(u.stars_spent), premiumUntil: u.premium_until,
@@ -754,9 +755,11 @@ route('POST', '/api/wallet/exchange', ({ user, body }) => {
   if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) throw bad('Exchange amount must be 1 to 1,000,000 Stars');
   return { data: tx(() => {
     const fresh = getUser(user.id);
+    const msgAmount = Math.floor(amount * msgExchangeRate());
+    if (!Number.isSafeInteger(msgAmount) || msgAmount < 1) throw bad('The current exchange rate produces less than 1 MSG');
     if (fresh.stars < amount) throw new HttpError(402, 'Not enough Stars');
     spend(user.id, amount);
-    db.prepare('UPDATE users SET msg_balance=msg_balance+? WHERE id=?').run(amount, user.id);
+    db.prepare('UPDATE users SET msg_balance=msg_balance+? WHERE id=?').run(msgAmount, user.id);
     return selfView(getUser(user.id));
   }) };
 });
@@ -1143,6 +1146,14 @@ route('GET', '/api/admin/market', ({ user }) => {
     volume: count('SELECT COALESCE(SUM(price),0) AS n FROM market_sales'),
     rate: Number(getSetting('msg_exchange_rate','1')) || 1
   } };
+});
+route('POST', '/api/admin/market/rate', ({ user, body }) => {
+  requireAdmin(user);
+  const rate = Number(body.rate);
+  if (!Number.isFinite(rate) || rate < 0.01 || rate > 1000 || Math.round(rate * 1000) !== rate * 1000) throw bad('Rate must be between 0.01 and 1000, up to 3 decimal places');
+  setSetting('msg_exchange_rate', rate);
+  logAdmin(user.id, 'msg_rate', null, '1 Star = ' + rate + ' MSG');
+  return { data: { rate } };
 });
 route('POST', '/api/admin/market/grant-msg', ({ user, body }) => {
   requireAdmin(user);
