@@ -686,6 +686,54 @@ function GiftUpgradeStudio({ back }) {
   );
 }
 
+function GiftVault({ userId }) {
+  const { me, setMe, setModal, toast } = useApp();
+  const [gifts, setGifts] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [busy, setBusy] = useState({});
+  const load = () => api('GET', `/users/${userId}/gifts`).then(setGifts).catch(() => setGifts([]));
+  useEffect(() => { load(); }, [userId]);
+  const list = (gifts || []).filter((g) => filter === 'favorites' ? g.favorite : filter === 'hidden' ? g.hidden : !g.hidden);
+  async function change(g, patch) {
+    setBusy((v) => ({ ...v, [g.id]: true }));
+    try {
+      const r = await api('PATCH', `/gifts/${g.id}/collection`, patch);
+      setGifts((old) => old.map((x) => x.id === g.id ? r : x));
+    } catch (e) { toast(e.message); } finally { setBusy((v) => ({ ...v, [g.id]: false })); }
+  }
+  async function sell(g) {
+    const price = g.upgraded ? Math.max(1, Math.floor(g.type.price * 0.8)) : Math.max(1, Math.floor(g.type.price * 0.5));
+    if (!confirm(`Sell ${g.type.name} for ⭐ ${price}? This cannot be undone.`)) return;
+    setBusy((v) => ({ ...v, [g.id]: true }));
+    try {
+      const r = await api('POST', `/gifts/${g.id}/sell`);
+      setMe({ ...me, stars: r.stars });
+      setGifts((old) => old.filter((x) => x.id !== g.id));
+      toast(`Sold for ⭐ ${r.soldPrice}`);
+    } catch (e) { toast(e.message); } finally { setBusy((v) => ({ ...v, [g.id]: false })); }
+  }
+  return (
+    <div className="gift-vault">
+      <div className="gift-vault-head"><b>🎒 My gift vault</b><small>Manage your collection</small></div>
+      <div className="gift-vault-tabs">
+        {[
+          ['all', 'Collection'], ['favorites', '♥ Favorites'], ['hidden', '◉ Hidden']
+        ].map(([id, label]) => <button key={id} className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>{label}</button>)}
+      </div>
+      {!gifts ? <div className="muted">Loading collection…</div> : !list.length ? <div className="upgrade-empty">{filter === 'favorites' ? 'No favorites yet. Tap ♥ on a gift to save it here.' : filter === 'hidden' ? 'No hidden gifts.' : 'Your collection is empty.'}</div> :
+        <div className="gift-vault-grid">{list.map((g) => <div className="gift-vault-item" key={g.id}>
+          <button className="gift-vault-open" onClick={() => setModal({ t: 'gift', gift: g })}><GiftCard gift={g} /></button>
+          <div className="gift-vault-actions">
+            <button disabled={!!busy[g.id]} className={g.favorite ? 'active' : ''} title="Favorite" onClick={() => change(g, { favorite: !g.favorite })}>{g.favorite ? '♥' : '♡'}</button>
+            <button disabled={!!busy[g.id]} title={g.hidden ? 'Unhide' : 'Hide'} onClick={() => change(g, { hidden: !g.hidden })}>{g.hidden ? '◉' : '⊘'}</button>
+            <button disabled={!!busy[g.id]} className="sell" title="Sell for Stars" onClick={() => sell(g)}>⭐ Sell</button>
+          </div>
+        </div>)}</div>}
+      <small className="muted gift-vault-note">Favorites and hidden status are private to you. Selling permanently removes the gift from your collection.</small>
+    </div>
+  );
+}
+
 function GiftsPage({ back }) {
   const { me, setMe, toast, setModal, closeSettings } = useApp();
   const [err, setErr] = useState('');
@@ -708,7 +756,7 @@ function GiftsPage({ back }) {
         <button className="primary" onClick={() => setModal({ t: 'shop', self: true })}>🎁 Buy a gift for myself</button>
         <button className="upgrade-studio-launch" onClick={() => back('upgrade-studio')}><span>✨</span><b>Open Gift Upgrade Studio</b><small>Rarity rolls · unique collectibles · collection</small><i>→</i></button>
         <h4>My gifts</h4>
-        <Collection userId={me.id} />
+        <GiftVault userId={me.id} />
       </div>
     </>
   );
