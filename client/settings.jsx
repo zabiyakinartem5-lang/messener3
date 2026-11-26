@@ -749,11 +749,11 @@ function MsgPage({ back }) {
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
   return <><Header title="MSG Wallet" onBack={back} /><div className="s-body">
-    <div className="msg-wallet-hero"><div className="msg-crystal" aria-hidden="true"><i /></div><small>YOUR MSG BALANCE</small><b>{(me.msg || 0).toLocaleString()} MSG</b><span>Blue crystal currency</span></div>
+    <div className="msg-wallet-hero"><div className="msg-mark msg-mark-large" aria-hidden="true">M</div><small>YOUR MSG BALANCE</small><b>{(me.msg || 0).toLocaleString()} MSG</b><span>MSG digital currency</span></div>
     <div className="wallet"><div><small>Stars available</small><b>⭐ {me.stars.toLocaleString()}</b></div><div><small>Exchange rate</small><b>1 ⭐ = {rate} MSG</b></div></div>
     <h4>Exchange Stars for MSG</h4><p className="muted small">MSG is used to buy and sell gifts in the marketplace. Exchange is instant and cannot be reversed.</p>
     <input className="search" type="number" min="1" max={me.stars} value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Stars to exchange" />
-    <div className="msg-note">You will receive approximately <b>{estimate.toLocaleString()} MSG</b></div><div className="row"><button className="primary" disabled={busy || !me.stars || estimate < 1} onClick={exchange}>🔷 Exchange for MSG</button><button className="primary ghosty small" onClick={() => setAmount(String(me.stars))}>Max</button></div>
+    <div className="msg-note">You will receive approximately <b>{estimate.toLocaleString()} MSG</b></div><div className="row"><button className="primary" disabled={busy || !me.stars || estimate < 1} onClick={exchange}><span className="msg-mark">M</span> Exchange for MSG</button><button className="primary ghosty small" onClick={() => setAmount(String(me.stars))}>Max</button></div>
     {err && <div className="error small" role="alert">{err}</div>}<div className="msg-note">💡 <span>List gifts you no longer need on the Market and earn MSG from other collectors.</span></div>
   </div></>;
 }
@@ -769,10 +769,10 @@ function MarketPage({ back }) {
   async function cancel(item) { try{await api('DELETE','/market/list/'+item.id);toast('Listing removed');await load();}catch(e){setErr(e.message);} }
   const listedGiftIds = new Set((rows||[]).filter(x=>x.own).map(x=>x.gift.id));
   return <><Header title="Gift Market" onBack={back}/><div className="s-body">
-    <div className="market-wallet"><span>🔷 {(me.msg||0).toLocaleString()} MSG</span><button className="link" onClick={()=>back('msg')}>Open wallet →</button></div>
+    <div className="market-wallet"><span><span className="msg-mark">M</span> {(me.msg||0).toLocaleString()} MSG</span><button className="link" onClick={()=>back('msg')}>Open wallet →</button></div>
     <div className="gift-vault-tabs">{['browse','sell','history'].map(k=><button key={k} className={tab===k?'on':''} onClick={()=>setTab(k)}>{k==='browse'?'🛍 Browse':k==='sell'?'📦 My listings':'🧾 History'}</button>)}</div>
     {err&&<div className="error small" role="alert">{err}</div>}
-    {tab==='browse'&&<div className="market-grid">{rows?.filter(x=>!x.own).map(item=><div className="market-item" key={item.id}><div className="market-gift">{item.gift.type.emoji}</div><b>{item.gift.type.name}</b><small>@{item.seller.username}{item.gift.upgraded?' · ✨ Upgraded':''}</small><strong className="msg-price">{item.price.toLocaleString()} 🔷 MSG</strong><button className="primary small" disabled={busy||(me.msg||0)<item.price} onClick={()=>buy(item)}>Buy</button></div>)}{rows&&!rows.some(x=>!x.own)&&<div className="empty-note">No gifts listed yet. Be the first to sell one!</div>}</div>}
+    {tab==='browse'&&<div className="market-grid">{rows?.filter(x=>!x.own).map(item=><div className="market-item" key={item.id}><div className="market-gift">{item.gift.type.emoji}</div><b>{item.gift.type.name}</b><small>@{item.seller.username}{item.gift.upgraded?' · ✨ Upgraded':''}</small><strong className="msg-price">{item.price.toLocaleString()} <span className="msg-mark">M</span> MSG</strong><button className="primary small" disabled={busy||(me.msg||0)<item.price} onClick={()=>buy(item)}>Buy</button></div>)}{rows&&!rows.some(x=>!x.own)&&<div className="empty-note">No gifts listed yet. Be the first to sell one!</div>}</div>}
     {tab==='sell'&&<><p className="muted small">Choose a gift from your collection and set a price in MSG. You receive MSG when another user buys it.</p><div className="market-grid">{owned.filter(g=>!g.hidden&&!listedGiftIds.has(g.id)).map(g=><div className="market-item" key={g.id}><div className="market-gift">{g.type.emoji}</div><b>{g.type.name}</b><small>{g.upgraded?'✨ Upgraded collectible':'Your collection'}</small><button className="primary small" onClick={()=>listGift(g)}>＋ List for sale</button></div>)}{!owned.some(g=>!g.hidden&&!listedGiftIds.has(g.id))&&<div className="empty-note">No available gifts to list.</div>}</div><h4>Active listings</h4>{(rows||[]).filter(x=>x.own).map(item=><div className="market-list-row" key={item.id}><span>{item.gift.type.emoji} {item.gift.type.name}</span><b>{item.price} MSG</b><button className="link danger" onClick={()=>cancel(item)}>Remove</button></div>)}</>}
     {tab==='history'&&<div className="market-history">{history.map(h=><div key={h.id}><span>{h.gift?.type?.emoji||'🎁'} {h.gift?.type?.name||'Gift'}</span><b>{h.side==='bought'?'Bought':'Sold'} · {h.price} MSG</b><small>{new Date(h.createdAt).toLocaleString()} · {h.side==='bought'?'from':'to'} @{h.side==='bought'?h.seller:h.buyer}</small></div>)}{!history.length&&<div className="empty-note">Your marketplace history will appear here.</div>}</div>}
   </div></>;
@@ -851,7 +851,7 @@ export function SettingsPanel() {
                  <Row icon="🎡" label="Rewards" value="Wheel · Achievements" onClick={() => setPage('rewards')} />
                 <Row icon="✨" label="Premium" value={me.premiumUntil > Date.now() ? 'Active' : ''} onClick={() => setPage('premium')} />
                 <Row icon="⭐" label="Stars & Gifts" value={'⭐ ' + me.stars} onClick={() => setPage('gifts')} />
-                <Row icon="🔷" label="MSG Wallet" value={(me.msg || 0).toLocaleString() + ' MSG'} onClick={() => setPage('msg')} />
+                <Row icon="M" label="MSG Wallet" value={(me.msg || 0).toLocaleString() + ' MSG'} onClick={() => setPage('msg')} />
                 <Row icon="🛍" label="Gift Market" onClick={() => setPage('market')} />
                 <Row icon="↩" label="Log out" danger onClick={() => confirm('Log out of Messenger?') && logout()} />
               </div>
