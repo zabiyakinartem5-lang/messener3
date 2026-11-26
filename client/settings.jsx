@@ -818,7 +818,9 @@ export function SettingsPanel() {
         {page === 'notifications' && <NotificationsPage back={back} />}
         {page === 'privacy' && <PrivacyPage back={back} />}
         {page === 'contacts' && <ContactsPage back={back} />}
-        {page === 'msg' && <MsgPage back={back} />}\n        {page === 'market' && <MarketPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}\n        {page === 'gifts' && <GiftsPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
+        {page === 'msg' && <MsgPage back={back} />}
+        {page === 'market' && <MarketPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
+        {page === 'gifts' && <GiftsPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
         {page === 'upgrade-studio' && <GiftUpgradeStudio back={() => setPage('gifts')} />}
         {page === 'premium' && <PremiumPage back={() => setPage('gifts')} />}
         {page === 'rewards' && <RewardsPage back={back} />}
