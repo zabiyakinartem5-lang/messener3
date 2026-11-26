@@ -128,6 +128,8 @@ function giftView(id) {
     upgradePrice: g.upgrade_price,
     canUpgrade: !g.upgraded && g.upgrade_price != null,
     createdAt: g.created_at,
+    favorite: !!g.favorite,
+    hidden: !!g.hidden,
   };
 }
 
@@ -765,10 +767,33 @@ route('GET', '/api/gifts/catalog', ({ user }) => {
   };
 });
 
-route('GET', '/api/users/:id/gifts', ({ params }) => {
+route('GET', '/api/users/:id/gifts', ({ user, params }) => {
   const id = intParam(params.id);
-  const ids = db.prepare('SELECT id FROM gifts WHERE owner_id=? ORDER BY id DESC').all(id).map((r) => r.id);
+  const ids = db.prepare('SELECT id FROM gifts WHERE owner_id=? AND sold_at IS NULL AND (hidden=0 OR owner_id=?) ORDER BY id DESC').all(id, user.id).map((r) => r.id);
   return { data: ids.map(giftView) };
+});
+
+route('PATCH', '/api/gifts/:id/collection', ({ user, params, body }) => {
+  const gid = intParam(params.id);
+  const gift = db.prepare('SELECT * FROM gifts WHERE id=? AND owner_id=? AND sold_at IS NULL').get(gid, user.id);
+  if (!gift) throw new HttpError(404, 'Gift not found');
+  const favorite = body.favorite == null ? gift.favorite : (body.favorite ? 1 : 0);
+  const hidden = body.hidden == null ? gift.hidden : (body.hidden ? 1 : 0);
+  db.prepare('UPDATE gifts SET favorite=?, hidden=? WHERE id=?').run(favorite, hidden, gid);
+  return { data: giftView(gid) };
+});
+
+route('POST', '/api/gifts/:id/sell', ({ user, params }) => {
+  const gid = intParam(params.id);
+  const soldPrice = tx(() => {
+    const g = db.prepare('SELECT g.*, t.price FROM gifts g JOIN gift_types t ON t.id=g.type_id WHERE g.id=? AND g.owner_id=? AND g.sold_at IS NULL').get(gid, user.id);
+    if (!g) throw new HttpError(404, 'Gift not found');
+    const price = Math.max(1, Math.floor(g.price * (g.upgraded ? 0.8 : 0.5)));
+    db.prepare('UPDATE gifts SET sold_at=?, sold_price=?, favorite=0, hidden=0 WHERE id=?').run(now(), price, gid);
+    db.prepare('UPDATE users SET stars=stars+? WHERE id=?').run(price, user.id);
+    return price;
+  });
+  return { data: { soldPrice, stars: getUser(user.id).stars } };
 });
 
 route('POST', '/api/gifts/send', ({ user, body }) => {
