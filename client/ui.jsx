@@ -136,14 +136,26 @@ export function SpinCard({ gift, reveal }) {
   );
 }
 
+export function giftRarity(gift) {
+  if (!gift?.upgraded || !gift.attrs) return null;
+  const chances = [gift.attrs.model?.rarity, gift.attrs.backdrop?.rarity, gift.attrs.pattern?.rarity, gift.attrs.finish?.rarity].filter((n) => Number.isFinite(n) && n > 0);
+  const rarest = chances.length ? Math.min(...chances) : 100;
+  if (rarest <= 1) return { id: 'mythic', label: 'MYTHIC', icon: '🌌' };
+  if (rarest <= 3) return { id: 'legendary', label: 'LEGENDARY', icon: '👑' };
+  if (rarest <= 10) return { id: 'epic', label: 'EPIC', icon: '💜' };
+  if (rarest <= 25) return { id: 'rare', label: 'RARE', icon: '💎' };
+  return { id: 'common', label: 'COMMON', icon: '✦' };
+}
+
 export function GiftCard({ gift, big, reveal, spin }) {
   const t = gift.type;
   if (gift.upgraded && gift.attrs) {
     const b = gift.attrs.backdrop;
     const fin = (gift.attrs.finish?.name || 'Satin').toLowerCase();
-    const rare = gift.attrs.model.rarity <= 5;
+    const rarity = giftRarity(gift);
     return (
-      <div className={'gift-card upgraded finish-' + fin + (rare ? ' rare' : '') + (big ? ' big' : '') + (reveal ? ' reveal' : '')} style={{ background: `radial-gradient(circle at 50% 35%, ${b.c1}, ${b.c2})` }}>
+      <div className={'gift-card upgraded rarity-' + rarity.id + ' finish-' + fin + (big ? ' big' : '') + (reveal ? ' reveal' : '')} style={{ background: `radial-gradient(circle at 50% 35%, ${b.c1}, ${b.c2})` }}>
+        <span className={'gift-rarity rarity-' + rarity.id}>{rarity.icon} {rarity.label}</span>
         <div className="pattern" aria-hidden="true">
           {Array.from({ length: 12 }).map((_, i) => (
             <span key={i} style={{ left: `${(i * 37) % 90 + 3}%`, top: `${(i * 53) % 85 + 4}%`, fontSize: 14 + (i % 3) * 6 }}>{gift.attrs.pattern.emoji}</span>
@@ -157,7 +169,7 @@ export function GiftCard({ gift, big, reveal, spin }) {
     );
   }
   return (
-    <div className={'gift-card' + (big ? ' big' : '')} style={{ background: `linear-gradient(160deg, ${t.color}55, ${t.color}22)` }}>
+    <div className={'gift-card' + (big ? ' big' : '')} style={{ background: `linear-gradient(160deg, ${t.color}33, #050507 72%)` }}>
       {t.model3d ? <Model3D emoji={t.emoji} layers={big ? 14 : 6} gap={big ? 4 : 3} ry={spin?.ry} rx={spin?.rx} /> : <div className="gift-emoji">{t.emoji}</div>}
       <div className="gift-name">{t.name}</div>
       {t.limited && gift.serial && <div className="gift-sub">#{gift.serial} of {t.supply}</div>}
