@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, createContext
 import { createRoot } from 'react-dom/client';
 import { api, upload, getToken, setToken, timeOf, shortDate, dayLabel, lastSeen, fmtSize, preview } from './api.js';
 import { Ctx, useApp } from './ctx.js';
-import { Avatar, Modal, GiftCard, GRADS, TypingDots, Collection, CoverDeco, ModelStrip, LevelBadge, SpinCard, nameFor } from './ui.jsx';
+import { Avatar, Modal, GiftCard, GRADS, TypingDots, Collection, CoverDeco, ModelStrip, LevelBadge, SpinCard, nameFor, giftRarity } from './ui.jsx';
 import { SettingsPanel } from './settings.jsx';
 import { burst, beep } from './fx.js';
 import { loadKept, rememberKept, forgetKept } from './kept.js';
@@ -651,6 +651,7 @@ function GiftDetail({ gift: initial }) {
       <SpinCard gift={gift} reveal={revealed} key={gift.upgraded ? 'up' : 'plain'} />
       <p className="muted center">From <b>{gift.sender.displayName}</b> · owned by <b>{gift.owner.displayName}</b></p>
       {!gift.upgraded && gift.canUpgrade && <><h4>Possible models</h4><ModelStrip models={gift.type.models} /></>}
+      {gift.upgraded && gift.attrs && <div className={'gift-rarity-detail rarity-' + (giftRarity(gift)?.id || 'common')}>{giftRarity(gift)?.icon} {giftRarity(gift)?.label} COLLECTIBLE</div>}
       {gift.upgraded && gift.token && <div className="token" title="Unique token of this collectible">🔗 Token <code>{gift.token}</code></div>}
       {gift.upgraded && gift.attrs && (
         <table className="attrs"><tbody>
