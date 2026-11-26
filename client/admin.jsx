@@ -350,10 +350,27 @@ function GiftsTab() {
   );
 }
 
+function MarketAdmin() {
+  const { toast } = useApp();
+  const [data,setData] = useState(null); const [err,setErr] = useState('');
+  async function load(){try{setData(await api('GET','/admin/market'));}catch(e){setErr(e.message);}}
+  useEffect(()=>{load();},[]);
+  async function grant(){const id=prompt('User ID to receive MSG');if(id===null)return;const amount=prompt('How many MSG to grant?','100');if(amount===null)return;try{await api('POST','/admin/market/grant-msg',{userId:Number(id),amount:Number(amount)});toast('MSG granted');}catch(e){setErr(e.message);}}
+  async function remove(item){if(!confirm('Remove this marketplace listing?'))return;try{await api('DELETE','/admin/market/listings/'+item.id);toast('Listing removed');load();}catch(e){setErr(e.message);}}
+  if(!data)return <div className={err?'error':'muted'}>{err||'Loading…'}</div>;
+  return <><div className="stat-grid">
+    <div className="stat-card"><span className="stat-ic">🔷</span><b>{data.msgSupply.toLocaleString()}</b><small>MSG in wallets</small></div>
+    <div className="stat-card"><span className="stat-ic">🛍</span><b>{data.active.length}</b><small>Active listings</small></div>
+    <div className="stat-card"><span className="stat-ic">🤝</span><b>{data.sales.toLocaleString()}</b><small>Completed sales</small></div>
+    <div className="stat-card"><span className="stat-ic">📈</span><b>{data.volume.toLocaleString()}</b><small>MSG trade volume</small></div>
+  </div><div className="row"><b>Exchange rate: 1 ⭐ = 1 🔷 MSG</b><button className="primary small" onClick={grant}>＋ Grant MSG</button></div>
+  {err&&<div className="error small">{err}</div>}<h4>Active marketplace listings</h4>
+  <div className="admin-users">{data.active.map(item=><div className="admin-user" key={item.id}><span className="stat-ic">{item.gift.type.emoji}</span><div className="au-main"><b>{item.gift.type.name}</b><small>@{item.seller} · {item.price.toLocaleString()} MSG · {shortDate(item.createdAt)}</small></div><div className="au-actions"><button className="danger" onClick={()=>remove(item)}>Remove</button></div></div>)}{!data.active.length&&<div className="muted">No active listings</div>}</div></>;
+}
 export function AdminPanel() {
   const { setModal } = useApp();
   const [tab, setTab] = useState('overview');
-  const tabs = [['overview', '📊 Overview'], ['users', '👥 Users'], ['chats', '💬 Chats'], ['gifts', '🎁 Gifts'], ['reports', '🚩 Reports'], ['settings', '⚙️ Access'], ['announce', '📣 Announce & log']];
+  const tabs = [['overview', '📊 Overview'], ['users', '👥 Users'], ['chats', '💬 Chats'], ['gifts', '🎁 Gifts'], ['market', '🔷 Market & MSG'], ['reports', '🚩 Reports'], ['settings', '⚙️ Access'], ['announce', '📣 Announce & log']];
   return (
     <Modal title="🛡 Admin panel" onClose={() => setModal(null)} wide>
       <div className="admin-tabs" role="tablist">
@@ -363,7 +380,7 @@ export function AdminPanel() {
         {tab === 'overview' && <Overview />}
         {tab === 'users' && <Users />}
         {tab === 'chats' && <ChatsTab />}
-        {tab === 'gifts' && <GiftsTab />}
+        {tab === 'gifts' && <GiftsTab />}\n        {tab === 'market' && <MarketAdmin />}
         {tab === 'reports' && <ReportsTab />}
         {tab === 'settings' && <SettingsTab />}
         {tab === 'announce' && <Announce />}
