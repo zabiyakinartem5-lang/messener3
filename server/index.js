@@ -864,6 +864,7 @@ route('PATCH', '/api/gifts/:id/collection', ({ user, params, body }) => {
   const gid = intParam(params.id);
   const gift = db.prepare('SELECT * FROM gifts WHERE id=? AND owner_id=? AND sold_at IS NULL').get(gid, user.id);
   if (!gift) throw new HttpError(404, 'Gift not found');
+  if (body.hidden && db.prepare("SELECT 1 FROM market_listings WHERE gift_id=? AND status='active'").get(gid)) throw bad('Remove this gift from the Market before hiding it');
   const favorite = body.favorite == null ? gift.favorite : (body.favorite ? 1 : 0);
   const hidden = body.hidden == null ? gift.hidden : (body.hidden ? 1 : 0);
   db.prepare('UPDATE gifts SET favorite=?, hidden=? WHERE id=?').run(favorite, hidden, gid);
@@ -875,6 +876,7 @@ route('POST', '/api/gifts/:id/sell', ({ user, params }) => {
   const soldPrice = tx(() => {
     const g = db.prepare('SELECT g.*, t.price FROM gifts g JOIN gift_types t ON t.id=g.type_id WHERE g.id=? AND g.owner_id=? AND g.sold_at IS NULL').get(gid, user.id);
     if (!g) throw new HttpError(404, 'Gift not found');
+    if (db.prepare("SELECT 1 FROM market_listings WHERE gift_id=? AND status='active'").get(gid)) throw bad('Remove this gift from the Market before selling it');
     const price = Math.max(1, Math.floor(g.price * (g.upgraded ? 0.8 : 0.5)));
     db.prepare('UPDATE gifts SET sold_at=?, sold_price=?, favorite=0, hidden=0 WHERE id=?').run(now(), price, gid);
     db.prepare('UPDATE users SET stars=stars+? WHERE id=?').run(price, user.id);
@@ -961,6 +963,7 @@ function refreshGiftMessage(gift) {
 
 route('POST', '/api/gifts/:id/upgrade', ({ user, params }) => {
   const gid = intParam(params.id);
+  if (db.prepare("SELECT 1 FROM market_listings WHERE gift_id=? AND status='active'").get(gid)) throw bad('Remove this gift from the Market before upgrading it');
   const gift = tx(() => {
     const g = db.prepare('SELECT * FROM gifts WHERE id=?').get(gid);
     if (!g || g.owner_id !== user.id) throw new HttpError(404, 'Gift not found');
@@ -981,6 +984,7 @@ route('POST', '/api/gifts/:id/upgrade', ({ user, params }) => {
 
 route('POST', '/api/gifts/:id/transfer', ({ user, params, body }) => {
   const gid = intParam(params.id);
+  if (db.prepare("SELECT 1 FROM market_listings WHERE gift_id=? AND status='active'").get(gid)) throw bad('Remove this gift from the Market before transferring it');
   const target = getUser(intParam(body.userId, 'userId'));
   if (!target) throw new HttpError(404, 'User not found');
   if (target.id === user.id) throw bad('Choose another user');
