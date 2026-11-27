@@ -182,9 +182,8 @@ function Sidebar() {
                 <button onClick={() => { setMenu(false); setModal({ t: 'new', kind: 'group' }); }}>👥 New group</button>
                 <button onClick={() => { setMenu(false); setModal({ t: 'new', kind: 'channel' }); }}>📢 New channel</button>
                 <button onClick={() => { setMenu(false); openSettings('contacts'); }}>👥 Contacts</button>
-                <button onClick={() => { setMenu(false); openSettings('gifts'); }}>🎁 My gifts</button>
+                <button onClick={() => { setMenu(false); openSettings('gifts'); }}>🎒 Gift Backpack</button>
                 <button onClick={() => { setMenu(false); openSettings('market'); }}>🛍 Gift Market</button>
-                <button onClick={() => { setMenu(false); openSettings('msg'); }}><span className="msg-mark">M</span> MSG Wallet</button>
                 <button onClick={() => { setMenu(false); openSettings('rewards'); }}>🎡 Rewards</button>
                 {me.isAdmin && <button onClick={() => { setMenu(false); setModal({ t: 'admin' }); }}>🛡 Admin panel</button>}
                 <button onClick={() => { setMenu(false); openSettings('main'); }}>⚙️ Settings</button>
@@ -195,7 +194,6 @@ function Sidebar() {
         <input className="search" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
         <button className={'ghost-btn' + (me.ghost ? ' on' : '')} onClick={toggleGhost} aria-pressed={!!me.ghost} aria-label="Ghost mode" title={me.ghost ? 'Ghost mode is on: you are invisible' : 'Turn on ghost mode'}>👻</button>
         <button className="stars-pill" onClick={() => openSettings('gifts')} title="Your Stars balance">⭐ {me.stars}</button>
-        <button className="msg-pill" onClick={() => openSettings('msg')} title="Your MSG balance"><span className="msg-mark">M</span> {(me.msg || 0).toLocaleString()}</button>
       </div>
       {!q.trim() && chats.length > 3 && (
         <div className="filter-tabs" role="tablist" aria-label="Filter chats">
