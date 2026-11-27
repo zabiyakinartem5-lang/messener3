@@ -155,12 +155,6 @@ CREATE TABLE IF NOT EXISTS reactions (
   PRIMARY KEY (message_id, user_id, emoji)
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-addColumn('users', 'msg_balance', 'INTEGER NOT NULL DEFAULT 0');
-// Retire the old secondary currency without destroying anyone's stored balance.
-if (!db.prepare("SELECT 1 FROM settings WHERE key='msg_retired_refund_v1'").get()) {
-  db.prepare('UPDATE users SET stars=stars+COALESCE(msg_balance,0), msg_balance=0').run();
-  db.prepare("INSERT INTO settings (key,value) VALUES ('msg_retired_refund_v1','1')").run();
-}
 CREATE TABLE IF NOT EXISTS invites (
   code TEXT PRIMARY KEY,
   created_by INTEGER NOT NULL,
@@ -168,6 +162,12 @@ CREATE TABLE IF NOT EXISTS invites (
   used INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );`);
+addColumn('users', 'msg_balance', 'INTEGER NOT NULL DEFAULT 0');
+// Refund retired balances into Stars once; do not discard stored value.
+if (!db.prepare("SELECT 1 FROM settings WHERE key='msg_retired_refund_v1'").get()) {
+  db.prepare('UPDATE users SET stars=stars+COALESCE(msg_balance,0), msg_balance=0').run();
+  db.prepare("INSERT INTO settings (key,value) VALUES ('msg_retired_refund_v1','1')").run();
+}
 addColumn('users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('users', 'banned', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`CREATE TABLE IF NOT EXISTS admin_log (
@@ -343,7 +343,6 @@ CREATE TABLE IF NOT EXISTS market_listings (
   closed_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_market_active ON market_listings(status, created_at DESC);
-addColumn('market_listings', 'featured', 'INTEGER NOT NULL DEFAULT 0');
 CREATE TABLE IF NOT EXISTS market_sales (
   id INTEGER PRIMARY KEY,
   listing_id INTEGER NOT NULL,
@@ -355,6 +354,7 @@ CREATE TABLE IF NOT EXISTS market_sales (
 );
 CREATE INDEX IF NOT EXISTS idx_market_sales_time ON market_sales(created_at DESC);
 `);
+addColumn('market_listings', 'featured', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`CREATE TABLE IF NOT EXISTS ach_claims (
   user_id INTEGER NOT NULL, ach_id TEXT NOT NULL, created_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, ach_id)
