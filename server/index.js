@@ -182,7 +182,7 @@ function chatView(chat, userId, { withMembers = false } = {}) {
   const count = db.prepare('SELECT COUNT(*) AS n FROM members WHERE chat_id=?').get(chat.id).n;
   const v = {
     id: chat.id, type: chat.type, title: chat.title, handle: chat.handle, description: chat.description,
-    category: chat.category || '', permissions: { membersCanInvite: !!chat.members_can_invite, membersCanPin: !!chat.members_can_pin, membersCanDelete: !!chat.members_can_delete },
+    category: chat.category || '', permissions: { membersCanInvite: !!chat.members_can_invite, membersCanDelete: !!chat.members_can_delete },
     membersCount: count, createdAt: chat.created_at, unread,
     role: member?.role || null, canPost: member ? canPost(chat, member) : false,
     lastMessage: last ? messageView(last) : null,
@@ -1377,7 +1377,7 @@ route('PATCH', '/api/admin/chats/:id/permissions', ({ user, params, body }) => {
   requireAdmin(user);
   const chat = db.prepare("SELECT * FROM chats WHERE id=? AND type!='private'").get(intParam(params.id));
   if (!chat) throw new HttpError(404, 'Server not found');
-  const fields = { membersCanInvite:'members_can_invite', membersCanPin:'members_can_pin', membersCanDelete:'members_can_delete' };
+  const fields = { membersCanInvite:'members_can_invite', membersCanDelete:'members_can_delete' };
   const sets=[], values=[];
   for (const [key,col] of Object.entries(fields)) if (key in body) { sets.push(col+'=?'); values.push(body[key]?1:0); }
   if (sets.length) db.prepare('UPDATE chats SET '+sets.join(',')+' WHERE id=?').run(...values,chat.id);
