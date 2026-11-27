@@ -325,7 +325,6 @@ db.exec(`CREATE TABLE IF NOT EXISTS nicks (
 // Lucky wheel + achievements
 addColumn('users', 'wheel_at', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('users', 'wheel_spins', 'INTEGER NOT NULL DEFAULT 0');
-addColumn('users', 'msg_balance', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`
 CREATE TABLE IF NOT EXISTS market_listings (
   id INTEGER PRIMARY KEY,
