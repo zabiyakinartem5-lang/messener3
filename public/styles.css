@@ -896,3 +896,31 @@ html[data-winter="on"] .sidebar.settings { border-color: color-mix(in srgb, #d8a
 .admin-market-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:15px 0 8px}.admin-market-heading>div{display:flex;flex-direction:column;gap:3px}.admin-market-heading small{font-size:10px;color:var(--muted)}
 .admin-market-stats{margin-bottom:14px}
 @media(max-width:420px){.market-tools{flex-direction:column}.market-tools select{max-width:none}.market-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Liquid Glass collector UI */
+.gift-vault.liquid-glass{position:relative}
+.gift-vault .glass-panel,.gift-vault .gift-set-cell,.market-page .market-hero,.market-page .market-wallet,.market-page .market-item{
+  background:linear-gradient(145deg,rgba(255,255,255,.17),rgba(255,255,255,.045) 48%,rgba(130,170,255,.075));
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 12px 32px rgba(20,35,70,.12);
+  backdrop-filter:blur(22px) saturate(165%);-webkit-backdrop-filter:blur(22px) saturate(165%);
+}
+.gift-vault .backpack-hero{border-radius:22px;overflow:hidden;position:relative}
+.gift-vault .backpack-hero:after,.gift-set-cell:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,rgba(255,255,255,.22),transparent 36%,transparent 72%,rgba(255,255,255,.08))}
+.gift-vault .backpack-icon{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24);box-shadow:inset 0 1px 0 #ffffff66,0 8px 24px #00000012}
+.gift-vault .gift-vault-tabs{padding:5px;border-radius:16px}
+.gift-vault .gift-vault-tabs button{border-radius:12px;background:transparent}
+.gift-vault .gift-vault-tabs button.on{background:rgba(255,255,255,.22);box-shadow:inset 0 1px 0 #ffffff88,0 4px 16px #00000012}
+.gift-vault .gift-vault-item{border:1px solid rgba(255,255,255,.2);border-radius:19px;background:linear-gradient(145deg,rgba(255,255,255,.15),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 #ffffff30,0 10px 24px #0000000d;backdrop-filter:blur(16px) saturate(150%)}
+.gift-set-wrap{min-width:0}
+.gift-set-cell{position:relative;display:flex;width:100%;min-height:188px;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:14px 9px;border-radius:21px;color:var(--text);overflow:hidden;cursor:pointer}
+.gift-set-count{position:absolute;top:10px;right:11px;padding:4px 8px;border-radius:20px;background:rgba(255,255,255,.24);font-size:11px;font-weight:850}
+.gift-set-icons{position:relative;display:grid;grid-template-columns:repeat(2,44px);grid-template-rows:repeat(2,44px);gap:5px;place-content:center;min-height:98px}
+.gift-set-icons i{display:grid;place-items:center;width:44px;height:44px;border:1px solid #ffffff55;border-radius:14px;background:rgba(255,255,255,.2);box-shadow:inset 0 1px 0 #ffffff70,0 5px 13px #00000012;font-style:normal;font-size:27px;transform:rotate(calc((var(--set-i) - 1.5)*2deg))}
+.gift-set-icons em{position:absolute;right:-12px;bottom:-4px;padding:4px 7px;border-radius:12px;background:var(--accent);color:white;font-size:10px;font-style:normal;font-weight:800}
+.gift-set-cell>b{font-size:12px}.gift-set-cell>small{color:var(--muted);font-size:10px}.gift-set-open{font-size:10px;color:var(--accent);font-weight:750}
+.gift-set-expanded{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:9px;padding:10px;border:1px solid rgba(255,255,255,.18);border-radius:18px;background:rgba(255,255,255,.07);backdrop-filter:blur(18px)}
+.market-page .market-tabs button{border-radius:13px}
+.market-page .market-item{border-radius:20px}
+@media(prefers-reduced-transparency:reduce){.gift-vault .glass-panel,.gift-vault .gift-set-cell,.market-page .market-hero,.market-page .market-wallet,.market-page .market-item{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--panel)}}
