@@ -718,7 +718,7 @@ route('DELETE', '/api/messages/:id', ({ user, params }) => {
   const m = db.prepare('SELECT * FROM messages WHERE id=?').get(intParam(params.id));
   if (!m || m.deleted) throw new HttpError(404, 'Message not found');
   const { chat, member } = requireMember(m.chat_id, user.id);
-  const allowed = m.sender_id === user.id || (chat.type !== 'private' && isAdmin(member));
+  const allowed = m.sender_id === user.id || (chat.type !== 'private' && (isAdmin(member) || !!chat.members_can_delete));
   if (!allowed) throw new HttpError(403, 'You cannot delete this message');
   db.prepare("UPDATE messages SET deleted=1, text='', file_id=NULL WHERE id=?").run(m.id);
   if (m.file_id) {
