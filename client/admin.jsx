@@ -297,6 +297,27 @@ function ChatsTab() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   useEffect(() => { api('GET', '/admin/chats').then(setRows).catch((e) => setErr(e.message)); }, []);
+  async function configure(c) {
+    const category = prompt('Server category (e.g. Games, Friends, Work)', c.category || '');
+    if (category === null) return;
+    try {
+      await api('PATCH', '/admin/chats/' + c.id + '/category', { category });
+      const membersCanInvite = confirm('Allow regular members to invite others?');
+      const membersCanPin = confirm('Allow regular members to pin messages?');
+      const membersCanDelete = confirm('Allow regular members to delete messages for everyone?');
+      const permissions = await api('PATCH', '/admin/chats/' + c.id + '/permissions', { membersCanInvite, membersCanPin, membersCanDelete });
+      const members = await api('GET', '/admin/chats/' + c.id + '/members');
+      const username = prompt('Set a member role: enter username (blank to skip)', '');
+      if (username && username.trim()) {
+        const target = members.find(m => m.username.toLowerCase() === username.trim().replace(/^@/,'').toLowerCase());
+        if (!target) throw new Error('Member not found');
+        const role = prompt('Role: owner, admin or member', target.role);
+        if (role && ['owner','admin','member'].includes(role)) await api('PATCH', '/admin/chats/' + c.id + '/members/' + target.id + '/role', { role });
+      }
+      setRows(rs => rs.map(x => x.id === c.id ? { ...x, category, ...permissions } : x));
+      toast('Server settings saved');
+    } catch (e) { setErr(e.message); }
+  }
   async function del(c) {
     if (!confirm(`Delete the ${c.type} "${c.title}" with all its messages? This cannot be undone.`)) return;
     try { await api('DELETE', '/admin/chats/' + c.id); setRows((r) => r.filter((x) => x.id !== c.id)); toast('Deleted'); } catch (e) { setErr(e.message); }
@@ -310,8 +331,8 @@ function ChatsTab() {
         {rows?.map((c) => (
           <div className="admin-user" key={c.id} data-chat={c.title}>
             <span className="stat-ic">{c.type === 'channel' ? '📣' : '👥'}</span>
-            <div className="au-main"><b>{c.title}</b><small>{c.type}{c.handle ? ' · @' + c.handle : ''} · {c.members} members · {c.messages} messages · by @{c.owner || '?'}</small></div>
-            <div className="au-actions"><button className="danger" onClick={() => del(c)}>Delete</button></div>
+            <div className="au-main"><b>{c.title}</b><small>{c.type}{c.category ? ' · ' + c.category : ''}{c.handle ? ' · @' + c.handle : ''} · {c.members} members · {c.messages} messages · by @{c.owner || '?'}</small></div>
+            <div className="au-actions"><button onClick={() => configure(c)}>⚙ Settings & roles</button><button className="danger" onClick={() => del(c)}>Delete</button></div>
           </div>
         ))}
         {rows && !rows.length && <div className="muted">No groups or channels yet</div>}
