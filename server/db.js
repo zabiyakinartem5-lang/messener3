@@ -338,6 +338,7 @@ CREATE TABLE IF NOT EXISTS market_listings (
   closed_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_market_active ON market_listings(status, created_at DESC);
+addColumn('market_listings', 'featured', 'INTEGER NOT NULL DEFAULT 0');
 CREATE TABLE IF NOT EXISTS market_sales (
   id INTEGER PRIMARY KEY,
   listing_id INTEGER NOT NULL,
