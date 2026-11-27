@@ -320,6 +320,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS reports (
 
 addColumn('users', 'stars_spent', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('users', 'premium_until', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('chats', 'category', "TEXT NOT NULL DEFAULT ''");
+addColumn('chats', 'members_can_invite', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('chats', 'members_can_pin', 'INTEGER NOT NULL DEFAULT 1');
+addColumn('chats', 'members_can_delete', 'INTEGER NOT NULL DEFAULT 0');
 
 addColumn('users', 'name_color', "TEXT NOT NULL DEFAULT ''");
 // private nicknames: what *I* call somebody (only I see it)
