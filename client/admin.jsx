@@ -303,9 +303,8 @@ function ChatsTab() {
     try {
       await api('PATCH', '/admin/chats/' + c.id + '/category', { category });
       const membersCanInvite = confirm('Allow regular members to invite others?');
-      const membersCanPin = confirm('Allow regular members to pin messages?');
       const membersCanDelete = confirm('Allow regular members to delete messages for everyone?');
-      const permissions = await api('PATCH', '/admin/chats/' + c.id + '/permissions', { membersCanInvite, membersCanPin, membersCanDelete });
+      const permissions = await api('PATCH', '/admin/chats/' + c.id + '/permissions', { membersCanInvite, membersCanDelete });
       const members = await api('GET', '/admin/chats/' + c.id + '/members');
       const username = prompt('Set a member role: enter username (blank to skip)', '');
       if (username && username.trim()) {
