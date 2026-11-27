@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Настройка Messenger</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#101827;color:#f5f7fb;font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+main{width:min(440px,calc(100% - 36px));padding:34px;border:1px solid #29364b;border-radius:20px;background:#172235;box-shadow:0 24px 80px #0005}
+.logo{width:52px;height:52px;border-radius:16px;background:#3390ec;display:grid;place-items:center;font-size:27px;margin-bottom:22px}
+h1{font-size:25px;margin:0 0 8px}p{color:#aab8ca;line-height:1.55;margin:0 0 24px}
+label{display:block;font-size:13px;color:#c5d0df;margin-bottom:8px}input{width:100%;padding:14px;border:1px solid #3a4a61;border-radius:11px;background:#0f1929;color:white;font:inherit;outline:none}input:focus{border-color:#3390ec}
+button{width:100%;margin-top:14px;padding:14px;border:0;border-radius:11px;background:#3390ec;color:white;font:600 15px inherit;cursor:pointer}#error{color:#ff8585;min-height:22px;margin-top:12px;font-size:13px}
+small{display:block;color:#8495aa;margin-top:18px;line-height:1.5}
+</style></head>
+<body><main><div class="logo">✈</div><h1>Добро пожаловать в Messenger</h1>
+<p>Подключи приложение к своему серверу. Вставь полный Render-адрес мессенджера.</p>
+<form id="form"><label for="url">Адрес сервера</label><input id="url" type="url" placeholder="https://messenger-xxxx.onrender.com" required><button>Подключиться</button></form>
+<div id="error"></div><small>Адрес можно будет изменить позже в настройках приложения. Нужен уже запущенный сервер Messenger.</small>
+<script>
+const form=document.querySelector('#form'), input=document.querySelector('#url'), error=document.querySelector('#error');
+window.messengerDesktop.currentServer().then(v=>{if(v)input.value=v});
+form.addEventListener('submit',async e=>{e.preventDefault();error.textContent='Подключаемся…';try{await window.messengerDesktop.saveServer(input.value)}catch(err){error.textContent=err.message||'Не удалось подключиться'}});
+</script></main></body></html>
