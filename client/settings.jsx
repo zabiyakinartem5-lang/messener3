@@ -688,95 +688,135 @@ function GiftUpgradeStudio({ back }) {
 
 function GiftVault({ userId }) {
   const { me, setMe, setModal, toast } = useApp();
-  const [gifts, setGifts] = useState(null);
-  const [filter, setFilter] = useState('all');
-  const [busy, setBusy] = useState({});
-  const load = () => api('GET', `/users/${userId}/gifts`).then(setGifts).catch(() => setGifts([]));
-  useEffect(() => { load(); }, [userId]);
-  const list = (gifts || []).filter((g) => filter === 'favorites' ? g.favorite : filter === 'hidden' ? g.hidden : !g.hidden);
-  async function change(g, patch) {
-    setBusy((v) => ({ ...v, [g.id]: true }));
-    try {
-      const r = await api('PATCH', `/gifts/${g.id}/collection`, patch);
-      setGifts((old) => old.map((x) => x.id === g.id ? r : x));
-    } catch (e) { toast(e.message); } finally { setBusy((v) => ({ ...v, [g.id]: false })); }
+  const [gifts,setGifts]=useState(null);
+  const [listings,setListings]=useState([]);
+  const [filter,setFilter]=useState('all');
+  const [busy,setBusy]=useState({});
+  async function load(){
+    try{
+      const [owned,market]=await Promise.all([api('GET',`/users/${userId}/gifts`),api('GET','/market?mine=1')]);
+      setGifts(owned);setListings(market);
+    }catch{setGifts([]);}
   }
-  async function sell(g) {
-    const price = g.upgraded ? Math.max(1, Math.floor(g.type.price * 0.8)) : Math.max(1, Math.floor(g.type.price * 0.5));
-    if (!confirm(`Sell ${g.type.name} for ⭐ ${price}? This cannot be undone.`)) return;
-    setBusy((v) => ({ ...v, [g.id]: true }));
-    try {
-      const r = await api('POST', `/gifts/${g.id}/sell`);
-      setMe({ ...me, stars: r.stars });
-      setGifts((old) => old.filter((x) => x.id !== g.id));
-      toast(`Sold for ⭐ ${r.soldPrice}`);
-    } catch (e) { toast(e.message); } finally { setBusy((v) => ({ ...v, [g.id]: false })); }
+  useEffect(()=>{load();},[userId]);
+  const listingByGift=new Map(listings.map(x=>[x.gift.id,x]));
+  const list=(gifts||[]).filter(g=>filter==='favorites'?g.favorite:filter==='hidden'?g.hidden:filter==='market'?listingByGift.has(g.id):!g.hidden);
+  async function change(g,patch){
+    setBusy(v=>({...v,[g.id]:true}));
+    try{const r=await api('PATCH',`/gifts/${g.id}/collection`,patch);setGifts(old=>old.map(x=>x.id===g.id?r:x));}
+    catch(e){toast(e.message);}finally{setBusy(v=>({...v,[g.id]:false}));}
   }
-  return (
-    <div className="gift-vault">
-      <div className="gift-vault-head"><b>🎒 My gift vault</b><small>Manage your collection</small></div>
-      <div className="gift-vault-tabs">
-        {[
-          ['all', 'Collection'], ['favorites', '♥ Favorites'], ['hidden', '◉ Hidden']
-        ].map(([id, label]) => <button key={id} className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>{label}</button>)}
-      </div>
-      {!gifts ? <div className="muted">Loading collection…</div> : !list.length ? <div className="upgrade-empty">{filter === 'favorites' ? 'No favorites yet. Tap ♥ on a gift to save it here.' : filter === 'hidden' ? 'No hidden gifts.' : 'Your collection is empty.'}</div> :
-        <div className="gift-vault-grid">{list.map((g) => <div className="gift-vault-item" key={g.id}>
-          <button className="gift-vault-open" onClick={() => setModal({ t: 'gift', gift: g })}><GiftCard gift={g} /></button>
-          <div className="gift-vault-actions">
-            <button disabled={!!busy[g.id]} className={g.favorite ? 'active' : ''} title="Favorite" onClick={() => change(g, { favorite: !g.favorite })}>{g.favorite ? '♥' : '♡'}</button>
-            <button disabled={!!busy[g.id]} title={g.hidden ? 'Unhide' : 'Hide'} onClick={() => change(g, { hidden: !g.hidden })}>{g.hidden ? '◉' : '⊘'}</button>
-            <button disabled={!!busy[g.id]} className="sell" title="Sell for Stars" onClick={() => sell(g)}>⭐ Sell</button>
-          </div>
-        </div>)}</div>}
-      <small className="muted gift-vault-note">Favorites and hidden status are private to you. Selling permanently removes the gift from your collection.</small>
+  async function listForMarket(g){
+    const suggested=Math.max(1,Math.floor(g.type.price*(g.upgraded?1.5:1)));
+    const raw=prompt('Set your asking price in Stars for '+g.type.name,String(suggested));
+    if(raw===null)return;
+    const price=Number(raw);
+    if(!Number.isSafeInteger(price)||price<1||price>10000000){toast('Enter a valid whole-number price');return;}
+    setBusy(v=>({...v,[g.id]:true}));
+    try{await api('POST','/market/list',{giftId:g.id,price});toast('Gift listed in the Market');await load();}
+    catch(e){toast(e.message);}finally{setBusy(v=>({...v,[g.id]:false}));}
+  }
+  async function unlist(g){
+    const listing=listingByGift.get(g.id);if(!listing)return;
+    setBusy(v=>({...v,[g.id]:true}));
+    try{await api('DELETE','/market/list/'+listing.id);toast('Listing removed');await load();}
+    catch(e){toast(e.message);}finally{setBusy(v=>({...v,[g.id]:false}));}
+  }
+  async function sell(g){
+    const price=g.upgraded?Math.max(1,Math.floor(g.type.price*.8)):Math.max(1,Math.floor(g.type.price*.5));
+    if(!confirm(`Sell ${g.type.name} to the system for ⭐ ${price}? This cannot be undone.`))return;
+    setBusy(v=>({...v,[g.id]:true}));
+    try{const r=await api('POST',`/gifts/${g.id}/sell`);setMe({...me,stars:r.stars});setGifts(old=>old.filter(x=>x.id!==g.id));toast(`Sold for ⭐ ${r.soldPrice}`);}
+    catch(e){toast(e.message);}finally{setBusy(v=>({...v,[g.id]:false}));}
+  }
+  const rarityCount=(gifts||[]).filter(g=>!g.hidden&&giftRarity(g)?.id==='legendary'||!g.hidden&&giftRarity(g)?.id==='mythic').length;
+  return <div className="gift-vault">
+    <div className="backpack-hero">
+      <div className="backpack-icon">🎒</div>
+      <div><b>Gift Backpack</b><small>Your personal collection · {gifts?.length||0} gifts</small></div>
+      <div className="backpack-count"><strong>{(gifts||[]).filter(g=>!g.hidden).length}</strong><small>visible</small></div>
     </div>
-  );
-}
-
-function MsgPage({ back }) {
-  const { me, setMe, toast } = useApp();
-  const [amount, setAmount] = useState('100');
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-  const rate = Number(me.msgRate) || 1;
-  const estimate = Math.floor((Number(amount) || 0) * rate);
-  async function exchange() {
-    const n = Number(amount);
-    if (!Number.isSafeInteger(n) || n < 1 || n > me.stars) { setErr('Enter an amount within your Stars balance'); return; }
-    setBusy(true); setErr('');
-    try { const next = await api('POST', '/wallet/exchange', { stars: n }); setMe(next); toast('+' + n + ' MSG added to your wallet'); }
-    catch (e) { setErr(e.message); } finally { setBusy(false); }
-  }
-  return <><Header title="MSG Wallet" onBack={back} /><div className="s-body">
-    <div className="msg-wallet-hero"><div className="msg-mark msg-mark-large" aria-hidden="true">M</div><small>YOUR MSG BALANCE</small><b>{(me.msg || 0).toLocaleString()} MSG</b><span>MSG digital currency</span></div>
-    <div className="wallet"><div><small>Stars available</small><b>⭐ {me.stars.toLocaleString()}</b></div><div><small>Exchange rate</small><b>1 ⭐ = {rate} MSG</b></div></div>
-    <h4>Exchange Stars for MSG</h4><p className="muted small">MSG is used to buy and sell gifts in the marketplace. Exchange is instant and cannot be reversed.</p>
-    <input className="search" type="number" min="1" max={me.stars} value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Stars to exchange" />
-    <div className="msg-note">You will receive approximately <b>{estimate.toLocaleString()} MSG</b></div><div className="row"><button className="primary" disabled={busy || !me.stars || estimate < 1} onClick={exchange}><span className="msg-mark">M</span> Exchange for MSG</button><button className="primary ghosty small" onClick={() => setAmount(String(me.stars))}>Max</button></div>
-    {err && <div className="error small" role="alert">{err}</div>}<div className="msg-note">💡 <span>List gifts you no longer need on the Market and earn MSG from other collectors.</span></div>
-  </div></>;
+    <div className="backpack-stats"><span>♥ {(gifts||[]).filter(g=>g.favorite).length} favorites</span><span>✦ {rarityCount} top rarity</span><span>🏷 {listings.length} on market</span></div>
+    <div className="gift-vault-tabs">
+      { [['all','🎁 All'],['favorites','♥ Favorites'],['hidden','◉ Hidden'],['market','🏷 On market']].map(([id,label])=><button key={id} className={filter===id?'on':''} onClick={()=>setFilter(id)}>{label}</button>)}
+    </div>
+    {!gifts?<div className="muted">Opening your backpack…</div>:!list.length?<div className="upgrade-empty">{filter==='favorites'?'No favorites yet. Tap ♡ on a gift to keep it close.':filter==='hidden'?'No hidden gifts.':filter==='market'?'You have no gifts listed for sale.':'Your backpack is empty. Send or buy your first gift!'}</div>:
+      <div className="gift-vault-grid">{list.map(g=>{
+        const listing=listingByGift.get(g.id);const rarity=giftRarity(g);
+        return <div className="gift-vault-item backpack-item" key={g.id}>
+          <button className="gift-vault-open" onClick={()=>setModal({t:'gift',gift:g})}><GiftCard gift={g}/></button>
+          <div className="backpack-item-meta"><span className={'studio-rarity rarity-'+(rarity?.id||'common')}>{rarity?.icon||'🎁'} {rarity?.label||'Common'}</span>{listing&&<b className="listed-price">⭐ {listing.price.toLocaleString()}</b>}</div>
+          <div className="gift-vault-actions">
+            <button disabled={!!busy[g.id]} className={g.favorite?'active':''} title="Favorite" onClick={()=>change(g,{favorite:!g.favorite})}>{g.favorite?'♥':'♡'}</button>
+            <button disabled={!!busy[g.id]} title={g.hidden?'Unhide':'Hide'} onClick={()=>change(g,{hidden:!g.hidden})}>{g.hidden?'◉':'⊘'}</button>
+            {listing?<button disabled={!!busy[g.id]} className="sell" onClick={()=>unlist(g)}>Remove listing</button>:<button disabled={!!busy[g.id]} className="sell" onClick={()=>listForMarket(g)}>＋ Market</button>}
+            {!listing&&!g.hidden&&<button disabled={!!busy[g.id]} className="backpack-quick-sell" title="Sell to system for fixed price" onClick={()=>sell(g)}>⭐ Sell</button>}
+          </div>
+        </div>;
+      })}</div>}
+    <small className="muted gift-vault-note">Hidden gifts are private. A listed gift stays in your backpack until another collector buys it.</small>
+  </div>;
 }
 
 function MarketPage({ back }) {
-  const { me, setMe, toast } = useApp();
-  const [rows, setRows] = useState(null); const [owned, setOwned] = useState([]); const [history, setHistory] = useState([]);
-  const [tab, setTab] = useState('browse'); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
-  async function load() { try { const [market,gifts,sales] = await Promise.all([api('GET','/market'),api('GET','/users/'+me.id+'/gifts'),api('GET','/market/history')]); setRows(market); setOwned(gifts); setHistory(sales); } catch(e) { setErr(e.message); } }
-  useEffect(() => { load(); }, []);
-  async function listGift(g) { const raw=prompt('Set your price in MSG for '+g.type.name,String(Math.max(1,g.type.price))); if(raw===null)return; const price=Number(raw); if(!Number.isSafeInteger(price)||price<1||price>10000000){setErr('Enter a valid whole-number price');return;} try{await api('POST','/market/list',{giftId:g.id,price});toast('Gift listed on the Market');load();}catch(e){setErr(e.message);} }
-  async function buy(item) { if(!confirm('Buy '+item.gift.type.name+' for '+item.price+' MSG?'))return; setBusy(true);setErr('');try{const r=await api('POST','/market/buy/'+item.id);setMe({...me,msg:r.msg,stars:r.stars});toast('Gift purchased!');await load();}catch(e){setErr(e.message);}finally{setBusy(false);} }
-  async function cancel(item) { try{await api('DELETE','/market/list/'+item.id);toast('Listing removed');await load();}catch(e){setErr(e.message);} }
-  const listedGiftIds = new Set((rows||[]).filter(x=>x.own).map(x=>x.gift.id));
-  return <><Header title="Gift Market" onBack={back}/><div className="s-body">
-    <div className="market-wallet"><span><span className="msg-mark">M</span> {(me.msg||0).toLocaleString()} MSG</span><button className="link" onClick={()=>back('msg')}>Open wallet →</button></div>
-    <div className="gift-vault-tabs">{['browse','sell','history'].map(k=><button key={k} className={tab===k?'on':''} onClick={()=>setTab(k)}>{k==='browse'?'🛍 Browse':k==='sell'?'📦 My listings':'🧾 History'}</button>)}</div>
-    {err&&<div className="error small" role="alert">{err}</div>}
-    {tab==='browse'&&<div className="market-grid">{rows?.filter(x=>!x.own).map(item=><div className="market-item" key={item.id}><div className="market-gift">{item.gift.type.emoji}</div><b>{item.gift.type.name}</b><small>@{item.seller.username}{item.gift.upgraded?' · ✨ Upgraded':''}</small><strong className="msg-price">{item.price.toLocaleString()} <span className="msg-mark">M</span> MSG</strong><button className="primary small" disabled={busy||(me.msg||0)<item.price} onClick={()=>buy(item)}>Buy</button></div>)}{rows&&!rows.some(x=>!x.own)&&<div className="empty-note">No gifts listed yet. Be the first to sell one!</div>}</div>}
-    {tab==='sell'&&<><p className="muted small">Choose a gift from your collection and set a price in MSG. You receive MSG when another user buys it.</p><div className="market-fee-note">No hidden marketplace fee — you receive the full price you set.</div><div className="market-grid">{owned.filter(g=>!g.hidden&&!listedGiftIds.has(g.id)).map(g=><div className="market-item" key={g.id}><div className="market-gift">{g.type.emoji}</div><b>{g.type.name}</b><small>{g.upgraded?'✨ Upgraded collectible':'Your collection'}</small><button className="primary small" onClick={()=>listGift(g)}>＋ List for sale</button></div>)}{!owned.some(g=>!g.hidden&&!listedGiftIds.has(g.id))&&<div className="empty-note">No available gifts to list.</div>}</div><h4>Active listings</h4>{(rows||[]).filter(x=>x.own).map(item=><div className="market-list-row" key={item.id}><span>{item.gift.type.emoji} {item.gift.type.name}</span><b>{item.price} MSG</b><button className="link danger" onClick={()=>cancel(item)}>Remove</button></div>)}</>}
-    {tab==='history'&&<div className="market-history">{history.map(h=><div key={h.id}><span>{h.gift?.type?.emoji||'🎁'} {h.gift?.type?.name||'Gift'}</span><b>{h.side==='bought'?'Bought':'Sold'} · {h.price} MSG</b><small>{new Date(h.createdAt).toLocaleString()} · {h.side==='bought'?'from':'to'} @{h.side==='bought'?h.seller:h.buyer}</small></div>)}{!history.length&&<div className="empty-note">Your marketplace history will appear here.</div>}</div>}
+  const { me,setMe,toast }=useApp();
+  const [rows,setRows]=useState(null);const [owned,setOwned]=useState([]);const [history,setHistory]=useState([]);
+  const [tab,setTab]=useState('browse');const [query,setQuery]=useState('');const [sort,setSort]=useState('featured');const [err,setErr]=useState('');const [busy,setBusy]=useState(false);
+  async function load(){
+    try{const [market,gifts,sales]=await Promise.all([api('GET','/market'),api('GET','/users/'+me.id+'/gifts'),api('GET','/market/history')]);setRows(market);setOwned(gifts);setHistory(sales);}
+    catch(e){setErr(e.message);}
+  }
+  useEffect(()=>{load();},[]);
+  async function listGift(g){
+    const suggested=Math.max(1,Math.floor(g.type.price*(g.upgraded?1.5:1)));
+    const raw=prompt('Set your price in Stars for '+g.type.name,String(suggested));if(raw===null)return;
+    const price=Number(raw);if(!Number.isSafeInteger(price)||price<1||price>10000000){setErr('Enter a valid whole-number price in Stars');return;}
+    try{await api('POST','/market/list',{giftId:g.id,price});toast('Your gift is now listed');await load();}
+    catch(e){setErr(e.message);}
+  }
+  async function buy(item){
+    if(!confirm('Buy '+item.gift.type.name+' for ⭐ '+item.price.toLocaleString()+'?'))return;
+    setBusy(true);setErr('');
+    try{const r=await api('POST','/market/buy/'+item.id);setMe({...me,stars:r.stars});toast('Gift added to your backpack!');await load();}
+    catch(e){setErr(e.message);}finally{setBusy(false);}
+  }
+  async function cancel(item){
+    try{await api('DELETE','/market/list/'+item.id);toast('Listing removed');await load();}
+    catch(e){setErr(e.message);}
+  }
+  const mine=(rows||[]).filter(x=>x.own);
+  const visible=(rows||[]).filter(x=>!x.own&&(!query.trim()||x.gift.type.name.toLowerCase().includes(query.toLowerCase())||x.seller.username.toLowerCase().includes(query.toLowerCase())));
+  const sorted=[...visible].sort((a,b)=>sort==='cheap'?a.price-b.price:sort==='expensive'?b.price-a.price:sort==='new'?b.createdAt-a.createdAt:Number(b.featured)-Number(a.featured)||b.createdAt-a.createdAt);
+  const rarityLabel=(g)=>giftRarity(g)?.label||'Common';
+  return <><Header title="Gift Market" onBack={back}/><div className="s-body market-page">
+    <div className="market-hero"><div><span className="eyebrow">COLLECTOR'S MARKET</span><h2>Find your next favorite.</h2><p>Rare finds, unique upgrades and gifts from other collectors.</p></div><div className="market-hero-art">🎁</div></div>
+    <div className="market-wallet"><span>⭐ <b>{me.stars.toLocaleString()}</b> Stars</span><button className="link" onClick={()=>back('gifts')}>🎒 My backpack →</button></div>
+    <div className="market-tabs">{[['browse','Explore'],['sell','Sell a gift'],['mine','My listings'],['history','History']].map(([k,label])=><button key={k} className={tab===k?'on':''} onClick={()=>setTab(k)}>{label}</button>)}</div>
+    {err&&<div className="error small">{err}</div>}
+    {tab==='browse'&&<>
+      <div className="market-tools"><input className="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search gifts or sellers…"/><select value={sort} onChange={e=>setSort(e.target.value)}><option value="featured">Featured first</option><option value="new">Newest</option><option value="cheap">Price: low to high</option><option value="expensive">Price: high to low</option></select></div>
+      <div className="market-grid redesigned-market-grid">
+        {sorted.map(item=><div className={'market-item redesigned-market-item'+(item.featured?' featured':'')} key={item.id}>
+          {item.featured&&<span className="market-featured-tag">✦ Featured</span>}
+          <div className="market-gift">{item.gift.type.emoji}</div><b>{item.gift.type.name}</b>
+          <span className={'market-rarity rarity-'+(giftRarity(item.gift)?.id||'common')}>{rarityLabel(item.gift)}{item.gift.upgraded?' · Upgraded':''}</span>
+          <small>by @{item.seller.username}</small>
+          <strong className="market-price">⭐ {item.price.toLocaleString()}</strong>
+          <button className="primary small" disabled={busy||me.stars<item.price} onClick={()=>buy(item)}>{me.stars<item.price?'Not enough Stars':'Buy gift'}</button>
+        </div>)}
+        {rows&&!sorted.length&&<div className="empty-note">Nothing found. Try another search or check back later.</div>}
+      </div>
+    </>}
+    {tab==='sell'&&<>
+      <p className="muted small">Pick a gift from your backpack and choose your asking price. You receive the full amount when it sells.</p>
+      <div className="market-grid">{owned.filter(g=>!g.hidden&&!mine.some(x=>x.gift.id===g.id)).map(g=><div className="market-item" key={g.id}><div className="market-gift">{g.type.emoji}</div><b>{g.type.name}</b><small>{rarityLabel(g)}{g.upgraded?' · Upgraded':''}</small><button className="primary small" onClick={()=>listGift(g)}>＋ Set price</button></div>)}
+      {!owned.some(g=>!g.hidden&&!mine.some(x=>x.gift.id===g.id))&&<div className="empty-note">No gifts available. Your backpack is already up to date.</div>}</div>
+    </>}
+    {tab==='mine'&&<div className="market-history">{mine.map(item=><div className="market-owned-row" key={item.id}><span>{item.gift.type.emoji} {item.gift.type.name}</span><b>⭐ {item.price.toLocaleString()}</b><small>{item.featured?'✦ Featured · ':''}Listed {new Date(item.createdAt).toLocaleDateString()}</small><button className="link danger" onClick={()=>cancel(item)}>Remove listing</button></div>)}{!mine.length&&<div className="empty-note">You have no active listings.</div>}</div>}
+    {tab==='history'&&<div className="market-history">{history.map(h=><div key={h.id}><span>{h.gift?.type?.emoji||'🎁'} {h.gift?.type?.name||'Gift'}</span><b>{h.side==='bought'?'Bought':'Sold'} · ⭐ {h.price.toLocaleString()}</b><small>{new Date(h.createdAt).toLocaleString()} · {h.side==='bought'?'from':'to'} @{h.side==='bought'?h.seller:h.buyer}</small></div>)}{!history.length&&<div className="empty-note">Your marketplace history will appear here.</div>}</div>}
   </div></>;
 }
+
 function GiftsPage({ back }) {
   const { me, setMe, toast, setModal, closeSettings } = useApp();
   const [err, setErr] = useState('');
@@ -820,7 +860,6 @@ export function SettingsPanel() {
         {page === 'notifications' && <NotificationsPage back={back} />}
         {page === 'privacy' && <PrivacyPage back={back} />}
         {page === 'contacts' && <ContactsPage back={back} />}
-        {page === 'msg' && <MsgPage back={back} />}
         {page === 'market' && <MarketPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
         {page === 'gifts' && <GiftsPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
         {page === 'upgrade-studio' && <GiftUpgradeStudio back={() => setPage('gifts')} />}
@@ -850,8 +889,7 @@ export function SettingsPanel() {
                 <Row icon="🔒" label="Privacy" onClick={() => setPage('privacy')} />
                  <Row icon="🎡" label="Rewards" value="Wheel · Achievements" onClick={() => setPage('rewards')} />
                 <Row icon="✨" label="Premium" value={me.premiumUntil > Date.now() ? 'Active' : ''} onClick={() => setPage('premium')} />
-                <Row icon="⭐" label="Stars & Gifts" value={'⭐ ' + me.stars} onClick={() => setPage('gifts')} />
-                <Row icon="M" label="MSG Wallet" value={(me.msg || 0).toLocaleString() + ' MSG'} onClick={() => setPage('msg')} />
+                <Row icon="🎒" label="Gift Backpack" value={'⭐ ' + me.stars} onClick={() => setPage('gifts')} />
                 <Row icon="🛍" label="Gift Market" onClick={() => setPage('market')} />
                 <Row icon="↩" label="Log out" danger onClick={() => confirm('Log out of Messenger?') && logout()} />
               </div>
