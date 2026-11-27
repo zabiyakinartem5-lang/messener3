@@ -826,7 +826,7 @@ function GiftsPage({ back }) {
   }
   return (
     <>
-      <Header title="Stars & Gifts" onBack={back} />
+      <Header title="Gift Backpack" onBack={back} />
       <div className="s-body">
         <div className="wallet">
           <div><small>Balance</small><b>⭐ {me.stars}</b></div>
@@ -838,7 +838,7 @@ function GiftsPage({ back }) {
         <p className="muted">Send gifts with the 🎁 button in any private chat, or buy one for yourself. Limited gifts can be upgraded into unique collectibles and transferred.</p>
         <button className="primary" onClick={() => setModal({ t: 'shop', self: true })}>🎁 Buy a gift for myself</button>
         <button className="upgrade-studio-launch" onClick={() => back('upgrade-studio')}><span>✨</span><b>Open Gift Upgrade Studio</b><small>Rarity rolls · unique collectibles · collection</small><i>→</i></button>
-        <h4>My gifts</h4>
+        <h4>My backpack</h4>
         <GiftVault userId={me.id} />
       </div>
     </>
