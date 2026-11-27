@@ -24,17 +24,12 @@ const APP_NAME = (process.env.APP_NAME || 'Messenger').slice(0, 30);
 const isPremium = (u) => !!u && u.premium_until > Date.now();
 const premiumPrice = () => Math.max(1, Number(getSetting('premium_price', PREMIUM.defaultPrice)) || PREMIUM.defaultPrice);
 const giftPriceFor = (u, base) => (isPremium(u) ? Math.ceil(base * (100 - PREMIUM.discountPct) / 100) : base);
-// Charge Stars and count them towards the level; tells the person when they reach a new level.
-function spendMsgBalance(userId, amount) {
-  db.prepare('UPDATE users SET msg_balance=msg_balance-? WHERE id=? AND msg_balance>=?').run(amount, userId, amount);
-}
 function spend(userId, amount) {
   const before = levelOf(getUser(userId).stars_spent).n;
   db.prepare('UPDATE users SET stars=stars-?, stars_spent=stars_spent+? WHERE id=?').run(amount, amount, userId);
   const after = levelOf(getUser(userId).stars_spent);
   if (after.n > before) setTimeout(() => sendTo(userId, { type: 'level', level: after.n, title: after.title, icon: after.icon }), 50);
 }
-const msgExchangeRate = () => { const n = Number(getSetting('msg_exchange_rate', '1')); return Number.isFinite(n) && n > 0 ? n : 1; };
 const dailyBonus = () => Math.max(1, Number(getSetting('daily_bonus', 100)) || 100);
 const startStars = () => Math.max(0, Number(getSetting('start_stars', 500)) || 0);
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -94,7 +89,7 @@ const userView = (u) =>
     level: u.is_bot ? null : (({ n, title, icon }) => ({ n, title, icon }))(levelOf(u.stars_spent)), premium: isPremium(u),
   };
 const selfView = (u) => ({
-  ...userView(u), online: true, lastSeen: u.last_seen, stars: u.stars, msg: u.msg_balance || 0, msgRate: msgExchangeRate(), lastDaily: u.last_daily, hideSeen: !!u.hide_seen, ghost: !!u.ghost,
+  ...userView(u), online: true, lastSeen: u.last_seen, stars: u.stars, lastDaily: u.last_daily, hideSeen: !!u.hide_seen, ghost: !!u.ghost,
   aiPrompt: u.ai_prompt || '', aiModel: u.ai_model || '', isAdmin: !!u.is_admin,
   nameColor: u.name_color || '', nicks: Object.fromEntries(db.prepare('SELECT target_id, nick FROM nicks WHERE owner_id=?').all(u.id).map((r) => [r.target_id, r.nick])),
   starsSpent: u.stars_spent, levelInfo: levelOf(u.stars_spent), premiumUntil: u.premium_until,
@@ -749,87 +744,72 @@ route('POST', '/api/upload', async ({ req, user }) => {
   return { status: 201, data: fileView({ id, name, mime, size: buf.length }) };
 });
 
-/* ---------------------------- MSG & marketplace ------------------- */
-route('POST', '/api/wallet/exchange', ({ user, body }) => {
-  const amount = Number(body.stars);
-  if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) throw bad('Exchange amount must be 1 to 1,000,000 Stars');
-  return { data: tx(() => {
-    const fresh = getUser(user.id);
-    const msgAmount = Math.floor(amount * msgExchangeRate());
-    if (!Number.isSafeInteger(msgAmount) || msgAmount < 1) throw bad('The current exchange rate produces less than 1 MSG');
-    if (fresh.stars < amount) throw new HttpError(402, 'Not enough Stars');
-    spend(user.id, amount);
-    db.prepare('UPDATE users SET msg_balance=msg_balance+? WHERE id=?').run(msgAmount, user.id);
-    return selfView(getUser(user.id));
-  }) };
-});
-
+/* ---------------------------- Gift marketplace -------------------- */
 route('GET', '/api/market', ({ user, url }) => {
   const mine = url.searchParams.get('mine') === '1';
   const rows = db.prepare(`
     SELECT l.*, u.username, u.display_name
     FROM market_listings l JOIN users u ON u.id=l.seller_id
     WHERE l.status='active' ${mine ? 'AND l.seller_id=?' : ''}
-    ORDER BY l.created_at DESC LIMIT 100
+    ORDER BY l.featured DESC, l.created_at DESC LIMIT 150
   `).all(...(mine ? [user.id] : []));
-  return { data: rows.map((l) => ({ id: l.id, gift: giftView(l.gift_id), price: l.price, createdAt: l.created_at, seller: { id: l.seller_id, username: l.username, displayName: l.display_name }, own: l.seller_id === user.id })) };
+  return { data: rows.map((l) => ({ id:l.id, gift:giftView(l.gift_id), price:l.price, createdAt:l.created_at, featured:!!l.featured, seller:{id:l.seller_id,username:l.username,displayName:l.display_name}, own:l.seller_id===user.id })) };
 });
 
 route('POST', '/api/market/list', ({ user, body }) => {
   const giftId = intParam(body.giftId, 'giftId');
   const price = Number(body.price);
-  if (!Number.isSafeInteger(price) || price < 1 || price > 10000000) throw bad('Price must be 1 to 10,000,000 MSG');
+  if (!Number.isSafeInteger(price) || price < 1 || price > 10000000) throw bad('Price must be 1 to 10,000,000 Stars');
   const listingId = tx(() => {
     const gift = db.prepare('SELECT * FROM gifts WHERE id=? AND owner_id=? AND sold_at IS NULL').get(giftId, user.id);
     if (!gift || gift.hidden) throw new HttpError(404, 'Gift not found or hidden');
     const active = db.prepare("SELECT id FROM market_listings WHERE gift_id=? AND status='active'").get(giftId);
     if (active) throw new HttpError(409, 'This gift is already listed');
-    db.prepare(`INSERT INTO market_listings (gift_id,seller_id,price,created_at,status,buyer_id,closed_at)
-      VALUES (?,?,?,?,'active',NULL,NULL)
-      ON CONFLICT(gift_id) DO UPDATE SET seller_id=excluded.seller_id,price=excluded.price,created_at=excluded.created_at,status='active',buyer_id=NULL,closed_at=NULL`)
-      .run(giftId, user.id, price, now());
+    db.prepare(`INSERT INTO market_listings (gift_id,seller_id,price,created_at,status,buyer_id,closed_at,featured)
+      VALUES (?,?,?,?,'active',NULL,NULL,0)
+      ON CONFLICT(gift_id) DO UPDATE SET seller_id=excluded.seller_id,price=excluded.price,created_at=excluded.created_at,status='active',buyer_id=NULL,closed_at=NULL,featured=0`)
+      .run(giftId,user.id,price,now());
     return db.prepare('SELECT id FROM market_listings WHERE gift_id=?').get(giftId).id;
   });
-  return { status: 201, data: { id: listingId, msg: getUser(user.id).msg_balance } };
+  return { status:201, data:{id:listingId,stars:getUser(user.id).stars} };
 });
 
 route('DELETE', '/api/market/list/:id', ({ user, params }) => {
-  const id = intParam(params.id);
-  const changed = db.prepare("UPDATE market_listings SET status='cancelled',closed_at=? WHERE id=? AND seller_id=? AND status='active'").run(now(), id, user.id).changes;
-  if (!changed) throw new HttpError(404, 'Active listing not found');
-  return { data: { ok: true } };
+  const id=intParam(params.id);
+  const changed=db.prepare("UPDATE market_listings SET status='cancelled',closed_at=?,featured=0 WHERE id=? AND seller_id=? AND status='active'").run(now(),id,user.id).changes;
+  if(!changed)throw new HttpError(404,'Active listing not found');
+  return {data:{ok:true}};
 });
 
 route('POST', '/api/market/buy/:id', ({ user, params }) => {
-  const id = intParam(params.id);
-  const result = tx(() => {
-    const listing = db.prepare("SELECT * FROM market_listings WHERE id=? AND status='active'").get(id);
-    if (!listing) throw new HttpError(404, 'Listing is no longer available');
-    if (listing.seller_id === user.id) throw bad('You cannot buy your own gift');
-    const gift = db.prepare('SELECT * FROM gifts WHERE id=? AND owner_id=? AND sold_at IS NULL').get(listing.gift_id, listing.seller_id);
-    if (!gift || gift.hidden) throw new HttpError(409, 'This gift is no longer available');
-    const buyer = getUser(user.id);
-    if (buyer.msg_balance < listing.price) throw new HttpError(402, 'Not enough MSG');
-    const claimed = db.prepare("UPDATE market_listings SET status='sold',buyer_id=?,closed_at=? WHERE id=? AND status='active'").run(user.id, now(), id).changes;
-    if (!claimed) throw new HttpError(409, 'Someone just bought this gift');
-    spendMsgBalance(user.id, listing.price);
-    db.prepare('UPDATE users SET msg_balance=msg_balance+? WHERE id=?').run(listing.price, listing.seller_id);
-    db.prepare('UPDATE gifts SET owner_id=?,favorite=0,hidden=0 WHERE id=?').run(user.id, gift.id);
-    db.prepare("INSERT INTO gift_events (gift_id,kind,from_id,to_id,created_at) VALUES (?,'transferred',?,?,?)").run(gift.id, listing.seller_id, user.id, now());
-    db.prepare('INSERT INTO market_sales (listing_id,gift_id,seller_id,buyer_id,price,created_at) VALUES (?,?,?,?,?,?)').run(id, gift.id, listing.seller_id, user.id, listing.price, now());
-    return { msg: getUser(user.id).msg_balance, stars: getUser(user.id).stars, sellerId: listing.seller_id, giftId: gift.id };
+  const id=intParam(params.id);
+  const result=tx(()=>{
+    const listing=db.prepare("SELECT * FROM market_listings WHERE id=? AND status='active'").get(id);
+    if(!listing)throw new HttpError(404,'Listing is no longer available');
+    if(listing.seller_id===user.id)throw bad('You cannot buy your own gift');
+    const gift=db.prepare('SELECT * FROM gifts WHERE id=? AND owner_id=? AND sold_at IS NULL').get(listing.gift_id,listing.seller_id);
+    if(!gift||gift.hidden)throw new HttpError(409,'This gift is no longer available');
+    if(getUser(user.id).stars<listing.price)throw new HttpError(402,'Not enough Stars');
+    const claimed=db.prepare("UPDATE market_listings SET status='sold',buyer_id=?,closed_at=?,featured=0 WHERE id=? AND status='active'").run(user.id,now(),id).changes;
+    if(!claimed)throw new HttpError(409,'Someone just bought this gift');
+    spend(user.id,listing.price);
+    db.prepare('UPDATE users SET stars=stars+? WHERE id=?').run(listing.price,listing.seller_id);
+    db.prepare('UPDATE gifts SET owner_id=?,favorite=0,hidden=0 WHERE id=?').run(user.id,gift.id);
+    db.prepare("INSERT INTO gift_events (gift_id,kind,from_id,to_id,created_at) VALUES (?,'transferred',?,?,?)").run(gift.id,listing.seller_id,user.id,now());
+    db.prepare('INSERT INTO market_sales (listing_id,gift_id,seller_id,buyer_id,price,created_at) VALUES (?,?,?,?,?,?)').run(id,gift.id,listing.seller_id,user.id,listing.price,now());
+    return {stars:getUser(user.id).stars,sellerId:listing.seller_id,giftId:gift.id};
   });
-  sendTo(result.sellerId, { type: 'wallet:refresh' });
-  return { data: { msg: result.msg, stars: result.stars, gift: giftView(result.giftId) } };
+  sendTo(result.sellerId,{type:'wallet:refresh'});
+  return {data:{stars:result.stars,gift:giftView(result.giftId)}};
 });
 
 route('GET', '/api/market/history', ({ user }) => {
-  const rows = db.prepare(`
-    SELECT s.*, b.username AS buyer, v.username AS seller
+  const rows=db.prepare(`
+    SELECT s.*,b.username AS buyer,v.username AS seller
     FROM market_sales s JOIN users b ON b.id=s.buyer_id JOIN users v ON v.id=s.seller_id
     WHERE s.buyer_id=? OR s.seller_id=? ORDER BY s.created_at DESC LIMIT 100
-  `).all(user.id, user.id);
-  return { data: rows.map((r) => ({ id: r.id, gift: giftView(r.gift_id), price: r.price, createdAt: r.created_at, buyer: r.buyer, seller: r.seller, side: r.buyer_id === user.id ? 'bought' : 'sold' })) };
+  `).all(user.id,user.id);
+  return {data:rows.map(r=>({id:r.id,gift:giftView(r.gift_id),price:r.price,createdAt:r.created_at,buyer:r.buyer,seller:r.seller,side:r.buyer_id===user.id?'bought':'sold'}))};
 });
 
 /* ---------------------------- Stars & gifts ------------------------ */
@@ -1142,41 +1122,32 @@ const count = (sql, ...a) => db.prepare(sql).get(...a).n;
 
 route('GET', '/api/admin/market', ({ user }) => {
   requireAdmin(user);
-  const active = db.prepare(`SELECT l.*,u.username FROM market_listings l JOIN users u ON u.id=l.seller_id WHERE l.status='active' ORDER BY l.created_at DESC LIMIT 200`).all();
-  return { data: {
-    active: active.map((l) => ({ id:l.id, gift:giftView(l.gift_id), seller:l.username, price:l.price, createdAt:l.created_at })),
-    msgSupply: count('SELECT COALESCE(SUM(msg_balance),0) AS n FROM users'),
-    sales: count('SELECT COUNT(*) AS n FROM market_sales'),
-    volume: count('SELECT COALESCE(SUM(price),0) AS n FROM market_sales'),
-    rate: Number(getSetting('msg_exchange_rate','1')) || 1
-  } };
+  const active=db.prepare(`SELECT l.*,u.username FROM market_listings l JOIN users u ON u.id=l.seller_id WHERE l.status='active' ORDER BY l.featured DESC,l.created_at DESC LIMIT 200`).all();
+  const day=now()-86400000;
+  return {data:{
+    active:active.map(l=>({id:l.id,gift:giftView(l.gift_id),seller:l.username,price:l.price,createdAt:l.created_at,featured:!!l.featured})),
+    sales:count('SELECT COUNT(*) AS n FROM market_sales'),
+    volume:count('SELECT COALESCE(SUM(price),0) AS n FROM market_sales'),
+    today:count('SELECT COUNT(*) AS n FROM market_sales WHERE created_at>=?',day),
+    todayVolume:count('SELECT COALESCE(SUM(price),0) AS n FROM market_sales WHERE created_at>=?',day)
+  }};
 });
-route('POST', '/api/admin/market/rate', ({ user, body }) => {
+route('PATCH', '/api/admin/market/listings/:id', ({ user, params, body }) => {
   requireAdmin(user);
-  const rate = Number(body.rate);
-  if (!Number.isFinite(rate) || rate < 0.01 || rate > 1000 || Math.round(rate * 1000) !== rate * 1000) throw bad('Rate must be between 0.01 and 1000, up to 3 decimal places');
-  setSetting('msg_exchange_rate', rate);
-  logAdmin(user.id, 'msg_rate', null, '1 Star = ' + rate + ' MSG');
-  return { data: { rate } };
-});
-route('POST', '/api/admin/market/grant-msg', ({ user, body }) => {
-  requireAdmin(user);
-  const userId = intParam(body.userId, 'userId');
-  const amount = Number(body.amount);
-  if (!Number.isSafeInteger(amount) || amount < 1 || amount > 10000000) throw bad('MSG amount must be 1 to 10,000,000');
-  if (!getUser(userId)) throw new HttpError(404, 'User not found');
-  db.prepare('UPDATE users SET msg_balance=msg_balance+? WHERE id=?').run(amount,userId);
-  logAdmin(user.id,'grant_msg',userId,'+'+amount+' MSG');
-  sendTo(userId,{type:'wallet:refresh'});
-  return { data:{msg:getUser(userId).msg_balance} };
+  const id=intParam(params.id);
+  const featured=body.featured?1:0;
+  const changed=db.prepare("UPDATE market_listings SET featured=? WHERE id=? AND status='active'").run(featured,id).changes;
+  if(!changed)throw new HttpError(404,'Active listing not found');
+  logAdmin(user.id,featured?'market_feature':'market_unfeature',id,featured?'Pinned listing to marketplace':'Unpinned marketplace listing');
+  return {data:{ok:true,featured:!!featured}};
 });
 route('DELETE', '/api/admin/market/listings/:id', ({ user, params }) => {
   requireAdmin(user);
   const id=intParam(params.id);
-  const changed=db.prepare("UPDATE market_listings SET status='removed',closed_at=? WHERE id=? AND status='active'").run(now(),id).changes;
-  if(!changed) throw new HttpError(404,'Active listing not found');
+  const changed=db.prepare("UPDATE market_listings SET status='removed',closed_at=?,featured=0 WHERE id=? AND status='active'").run(now(),id).changes;
+  if(!changed)throw new HttpError(404,'Active listing not found');
   logAdmin(user.id,'market_remove',id,'Removed marketplace listing');
-  return { data:{ok:true} };
+  return {data:{ok:true}};
 });
 
 route('GET', '/api/admin/stats', async ({ user }) => {
