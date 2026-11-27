@@ -554,7 +554,7 @@ function GiftShop({ chatId, self, modal = {} }) {
     try {
       const r = self ? await api('POST', '/gifts/self', { typeId: sel.id }) : await api('POST', '/gifts/send', { chatId, typeId: sel.id, text: note });
       setMe({ ...me, stars: r.stars });
-      if (self) mergeGift(r.gift); else mergeMessage(r.message);
+      if (self) { mergeGift(r.gift); window.dispatchEvent(new Event('gift-collection-updated')); } else mergeMessage(r.message);
       burst([sel.emoji, '✨', '⭐', '🎉']);
       toast(self ? `${sel.name} added to your collection` : `Sent ${sel.name} to ${chat.title}`);
       setModal(self && modal.from === 'profile' ? { t: 'user', id: me.id } : null);
