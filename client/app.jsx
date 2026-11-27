@@ -182,7 +182,6 @@ function Sidebar() {
                 <button onClick={() => { setMenu(false); setModal({ t: 'new', kind: 'group' }); }}>👥 New group</button>
                 <button onClick={() => { setMenu(false); setModal({ t: 'new', kind: 'channel' }); }}>📢 New channel</button>
                 <button onClick={() => { setMenu(false); openSettings('contacts'); }}>👥 Contacts</button>
-                <button onClick={() => { setMenu(false); openSettings('gifts'); }}>🎒 Gift Backpack</button>
                 <button onClick={() => { setMenu(false); openSettings('market'); }}>🛍 Gift Market</button>
                 <button onClick={() => { setMenu(false); openSettings('rewards'); }}>🎡 Rewards</button>
                 {me.isAdmin && <button onClick={() => { setMenu(false); setModal({ t: 'admin' }); }}>🛡 Admin panel</button>}
