@@ -4,9 +4,44 @@
   "private": true,
   "scripts": {
     "build": "esbuild client/app.jsx client/boot.js --bundle --minify --jsx=automatic --define:process.env.NODE_ENV='\"production\"' --outdir=public",
-    "start": "node --no-warnings server/index.js"
+    "start": "node --no-warnings server/index.js",
+    "desktop": "electron desktop/main.cjs",
+    "desktop:build": "electron-builder --win nsis"
   },
-  "engines": { "node": ">=22.5" },
-  "dependencies": { "ws": "*", "react": "^19", "react-dom": "^19" },
-  "devDependencies": { "esbuild": "*" }
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "ws": "*",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "esbuild": "*",
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.messenger.desktop",
+    "productName": "Messenger",
+    "directories": {
+      "output": "dist-desktop"
+    },
+    "files": [
+      "desktop/**/*",
+      "!desktop/**/*.map"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Messenger-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
 }
