@@ -351,27 +351,40 @@ function GiftsTab() {
 }
 
 function MarketAdmin() {
-  const { toast, setMe } = useApp();
-  const [data,setData] = useState(null); const [err,setErr] = useState(''); const [rate,setRate] = useState('1');
-  async function load(){try{const d=await api('GET','/admin/market');setData(d);setRate(String(d.rate));}catch(e){setErr(e.message);}}
+  const { toast } = useApp();
+  const [data,setData]=useState(null);const [err,setErr]=useState('');
+  async function load(){try{setData(await api('GET','/admin/market'));}catch(e){setErr(e.message);}}
   useEffect(()=>{load();},[]);
-  async function saveRate(){try{const r=await api('POST','/admin/market/rate',{rate:Number(rate)});setRate(String(r.rate));api('GET','/me').then(setMe).catch(()=>{});toast('Exchange rate saved');load();}catch(e){setErr(e.message);}}
-  async function grant(){const id=prompt('User ID to receive MSG');if(id===null)return;const amount=prompt('How many MSG to grant?','100');if(amount===null)return;try{await api('POST','/admin/market/grant-msg',{userId:Number(id),amount:Number(amount)});toast('MSG granted');}catch(e){setErr(e.message);}}
-  async function remove(item){if(!confirm('Remove this marketplace listing?'))return;try{await api('DELETE','/admin/market/listings/'+item.id);toast('Listing removed');load();}catch(e){setErr(e.message);}}
-  if(!data)return <div className={err?'error':'muted'}>{err||'Loading…'}</div>;
-  return <><div className="stat-grid">
-    <div className="stat-card"><span className="stat-ic msg-stat-mark">M</span><b>{data.msgSupply.toLocaleString()}</b><small>MSG in wallets</small></div>
-    <div className="stat-card"><span className="stat-ic">🛍</span><b>{data.active.length}</b><small>Active listings</small></div>
-    <div className="stat-card"><span className="stat-ic">🤝</span><b>{data.sales.toLocaleString()}</b><small>Completed sales</small></div>
-    <div className="stat-card"><span className="stat-ic">📈</span><b>{data.volume.toLocaleString()}</b><small>MSG trade volume</small></div>
-  </div><div className="row"><label className="inline">Exchange rate · MSG per Star <input type="number" min="0.01" max="1000" step="0.001" value={rate} onChange={e=>setRate(e.target.value)} style={{width:100}} /></label><button className="primary small" onClick={saveRate}>Save rate</button><button className="primary small ghosty" onClick={grant}>＋ Grant MSG</button></div>
-  {err&&<div className="error small">{err}</div>}<h4>Active marketplace listings</h4>
-  <div className="admin-users">{data.active.map(item=><div className="admin-user" key={item.id}><span className="stat-ic">{item.gift.type.emoji}</span><div className="au-main"><b>{item.gift.type.name}</b><small>@{item.seller} · {item.price.toLocaleString()} MSG · {shortDate(item.createdAt)}</small></div><div className="au-actions"><button className="danger" onClick={()=>remove(item)}>Remove</button></div></div>)}{!data.active.length&&<div className="muted">No active listings</div>}</div></>;
+  async function feature(item){
+    try{await api('PATCH','/admin/market/listings/'+item.id,{featured:!item.featured});toast(item.featured?'Removed from featured':'Pinned to market front page');await load();}
+    catch(e){setErr(e.message);}
+  }
+  async function remove(item){
+    if(!confirm('Remove this gift listing from the market?'))return;
+    try{await api('DELETE','/admin/market/listings/'+item.id);toast('Listing removed');await load();}
+    catch(e){setErr(e.message);}
+  }
+  if(!data)return <div className={err?'error':'muted'}>{err||'Loading marketplace…'}</div>;
+  return <>
+    <div className="stat-grid market-admin-stats">
+      <div className="stat-card"><span className="stat-ic">🛍</span><b>{data.active.length}</b><small>Active listings</small></div>
+      <div className="stat-card"><span className="stat-ic">🤝</span><b>{data.sales.toLocaleString()}</b><small>Completed deals</small></div>
+      <div className="stat-card"><span className="stat-ic">⭐</span><b>{data.volume.toLocaleString()}</b><small>All-time Stars volume</small></div>
+      <div className="stat-card"><span className="stat-ic">📅</span><b>{data.today.toLocaleString()}</b><small>Deals today · ⭐ {data.todayVolume.toLocaleString()}</small></div>
+    </div>
+    <div className="admin-market-heading"><div><b>Marketplace moderation</b><small>Pin standout gifts to the top or remove suspicious listings.</small></div><button className="primary small" onClick={load}>↻ Refresh</button></div>
+    {err&&<div className="error small">{err}</div>}
+    <div className="admin-users">{data.active.map(item=><div className="admin-user" key={item.id}>
+      <span className="stat-ic">{item.gift.type.emoji}</span>
+      <div className="au-main"><b>{item.gift.type.name} {item.featured?'✦':''}</b><small>@{item.seller} · ⭐ {item.price.toLocaleString()} · {shortDate(item.createdAt)}{item.gift.upgraded?' · Upgraded':''}</small></div>
+      <div className="au-actions"><button onClick={()=>feature(item)}>{item.featured?'Unpin':'✦ Feature'}</button><button className="danger" onClick={()=>remove(item)}>Remove</button></div>
+    </div>)}{!data.active.length&&<div className="muted">No active listings at the moment.</div>}</div>
+  </>;
 }
 export function AdminPanel() {
   const { setModal } = useApp();
   const [tab, setTab] = useState('overview');
-  const tabs = [['overview', '📊 Overview'], ['users', '👥 Users'], ['chats', '💬 Chats'], ['gifts', '🎁 Gifts'], ['market', 'M Market & MSG'], ['reports', '🚩 Reports'], ['settings', '⚙️ Access'], ['announce', '📣 Announce & log']];
+  const tabs = [['overview', '📊 Overview'], ['users', '👥 Users'], ['chats', '💬 Chats'], ['gifts', '🎁 Gifts'], ['market', '🛍 Gift Market'], ['reports', '🚩 Reports'], ['settings', '⚙️ Access'], ['announce', '📣 Announce & log']];
   return (
     <Modal title="🛡 Admin panel" onClose={() => setModal(null)} wide>
       <div className="admin-tabs" role="tablist">
