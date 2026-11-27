@@ -799,7 +799,7 @@ function MarketPage({ back }) {
   async function buy(item){
     if(!confirm('Buy '+item.gift.type.name+' for ⭐ '+item.price.toLocaleString()+'?'))return;
     setBusy(true);setErr('');
-    try{const r=await api('POST','/market/buy/'+item.id);setMe({...me,stars:r.stars});if(r.gift){setOwned(old=>[r.gift,...old.filter(g=>g.id!==r.gift.id)]);window.dispatchEvent(new Event('gift-collection-updated'));}toast('Gift added to your backpack!');await load();}
+    try{const r=await api('POST','/market/buy/'+item.id);setMe({...me,stars:r.stars});if(r.gift){setOwned(old=>[r.gift,...old.filter(g=>g.id!==r.gift.id)]);window.dispatchEvent(new Event('gift-collection-updated'));}toast('Gift added to your collection!');await load();}
     catch(e){setErr(e.message);}finally{setBusy(false);}
   }
   async function cancel(item){
@@ -812,7 +812,7 @@ function MarketPage({ back }) {
   const rarityLabel=(g)=>giftRarity(g)?.label||'Common';
   return <><Header title="Gift Market" onBack={back}/><div className="s-body market-page">
     <div className="market-hero"><div><span className="eyebrow">COLLECTOR'S MARKET</span><h2>Find your next favorite.</h2><p>Rare finds, unique upgrades and gifts from other collectors.</p></div><div className="market-hero-art">🎁</div></div>
-    <div className="market-wallet"><span>⭐ <b>{me.stars.toLocaleString()}</b> Stars</span><button className="link" onClick={()=>back('gifts')}>🎒 My backpack →</button></div>
+    <div className="market-wallet"><span>⭐ <b>{me.stars.toLocaleString()}</b> Stars</span></div>
     <div className="market-tabs">{[['browse','Explore'],['sell','Sell a gift'],['mine','My listings'],['history','History']].map(([k,label])=><button key={k} className={tab===k?'on':''} onClick={()=>setTab(k)}>{label}</button>)}</div>
     {err&&<div className="error small">{err}</div>}
     {tab==='browse'&&<>
@@ -830,9 +830,9 @@ function MarketPage({ back }) {
       </div>
     </>}
     {tab==='sell'&&<>
-      <p className="muted small">Pick a gift from your backpack and choose your asking price. You receive the full amount when it sells.</p>
+      <p className="muted small">Choose one of your gifts and set an asking price. You receive the full amount when it sells.</p>
       <div className="market-grid">{owned.filter(g=>!g.hidden&&!mine.some(x=>x.gift.id===g.id)).map(g=><div className="market-item" key={g.id}><div className="market-gift">{g.type.emoji}</div><b>{g.type.name}</b><small>{rarityLabel(g)}{g.upgraded?' · Upgraded':''}</small><button className="primary small" onClick={()=>listGift(g)}>＋ Set price</button></div>)}
-      {!owned.some(g=>!g.hidden&&!mine.some(x=>x.gift.id===g.id))&&<div className="empty-note">No gifts available. Your backpack is already up to date.</div>}</div>
+      {!owned.some(g=>!g.hidden&&!mine.some(x=>x.gift.id===g.id))&&<div className="empty-note">No gifts available. You have no gifts available to list right now.</div>}</div>
     </>}
     {tab==='mine'&&<div className="market-history">{mine.map(item=><div className="market-owned-row" key={item.id}><span>{item.gift.type.emoji} {item.gift.type.name}</span><b>⭐ {item.price.toLocaleString()}</b><small>{item.featured?'✦ Featured · ':''}Listed {new Date(item.createdAt).toLocaleDateString()}</small><button className="link danger" onClick={()=>cancel(item)}>Remove listing</button></div>)}{!mine.length&&<div className="empty-note">You have no active listings.</div>}</div>}
     {tab==='history'&&<div className="market-history">{history.map(h=><div key={h.id}><span>{h.gift?.type?.emoji||'🎁'} {h.gift?.type?.name||'Gift'}</span><b>{h.side==='bought'?'Bought':'Sold'} · ⭐ {h.price.toLocaleString()}</b><small>{new Date(h.createdAt).toLocaleString()} · {h.side==='bought'?'from':'to'} @{h.side==='bought'?h.seller:h.buyer}</small></div>)}{!history.length&&<div className="empty-note">Your marketplace history will appear here.</div>}</div>}
@@ -883,8 +883,8 @@ export function SettingsPanel() {
         {page === 'privacy' && <PrivacyPage back={back} />}
         {page === 'contacts' && <ContactsPage back={back} />}
         {page === 'market' && <MarketPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
-                {page === 'upgrade-studio' && <GiftUpgradeStudio back={() => setPage('gifts')} />}
-        {page === 'premium' && <PremiumPage back={() => setPage('gifts')} />}
+                {page === 'upgrade-studio' && <GiftUpgradeStudio back={back} />}
+        {page === 'premium' && <PremiumPage back={back} />}
         {page === 'rewards' && <RewardsPage back={back} />}
         {page === 'main' && (
           <>
