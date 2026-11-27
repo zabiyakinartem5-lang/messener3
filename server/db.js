@@ -155,6 +155,12 @@ CREATE TABLE IF NOT EXISTS reactions (
   PRIMARY KEY (message_id, user_id, emoji)
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+addColumn('users', 'msg_balance', 'INTEGER NOT NULL DEFAULT 0');
+// Retire the old secondary currency without destroying anyone's stored balance.
+if (!db.prepare("SELECT 1 FROM settings WHERE key='msg_retired_refund_v1'").get()) {
+  db.prepare('UPDATE users SET stars=stars+COALESCE(msg_balance,0), msg_balance=0').run();
+  db.prepare("INSERT INTO settings (key,value) VALUES ('msg_retired_refund_v1','1')").run();
+}
 CREATE TABLE IF NOT EXISTS invites (
   code TEXT PRIMARY KEY,
   created_by INTEGER NOT NULL,
