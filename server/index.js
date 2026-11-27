@@ -182,6 +182,7 @@ function chatView(chat, userId, { withMembers = false } = {}) {
   const count = db.prepare('SELECT COUNT(*) AS n FROM members WHERE chat_id=?').get(chat.id).n;
   const v = {
     id: chat.id, type: chat.type, title: chat.title, handle: chat.handle, description: chat.description,
+    category: chat.category || '', permissions: { membersCanInvite: !!chat.members_can_invite, membersCanPin: !!chat.members_can_pin, membersCanDelete: !!chat.members_can_delete },
     membersCount: count, createdAt: chat.created_at, unread,
     role: member?.role || null, canPost: member ? canPost(chat, member) : false,
     lastMessage: last ? messageView(last) : null,
@@ -626,6 +627,7 @@ route('POST', '/api/chats/:id/members', ({ user, params, body }) => {
   const { chat, member } = requireMember(intParam(params.id), user.id);
   if (chat.type === 'private') throw bad('Cannot add members to a private chat');
   if (chat.type === 'channel' && !isAdmin(member)) throw new HttpError(403, 'Only admins can add subscribers');
+  if (!isAdmin(member) && !chat.members_can_invite) throw new HttpError(403, 'You do not have permission to invite members');
   const target = getUser(intParam(body.userId, 'userId'));
   if (!target) throw new HttpError(404, 'User not found');
   if (!getMember(chat.id, target.id)) {
@@ -1350,9 +1352,56 @@ route('GET', '/api/admin/chats', ({ user }) => {
       (SELECT COUNT(*) FROM messages x WHERE x.chat_id=c.id AND x.kind!='system') AS msgs,
       (SELECT username FROM users u WHERE u.id=c.created_by) AS owner
     FROM chats c WHERE c.type!='private' ORDER BY c.id DESC LIMIT 200`).all();
-  return { data: rows.map((c) => ({ id: c.id, type: c.type, title: c.title, handle: c.handle, members: c.members, messages: c.msgs, owner: c.owner, createdAt: c.created_at })) };
+  return { data: rows.map((c) => ({ id: c.id, type: c.type, title: c.title, handle: c.handle, members: c.members, messages: c.msgs, owner: c.owner, category: c.category || '', membersCanInvite: !!c.members_can_invite, membersCanPin: !!c.members_can_pin, membersCanDelete: !!c.members_can_delete, createdAt: c.created_at })) };
 });
 
+route('GET', '/api/admin/chats/:id/members', ({ user, params }) => {
+  requireAdmin(user);
+  const chat = db.prepare("SELECT * FROM chats WHERE id=? AND type!='private'").get(intParam(params.id));
+  if (!chat) throw new HttpError(404, 'Server not found');
+  return { data: db.prepare('SELECT u.id,u.username,u.display_name,m.role FROM members m JOIN users u ON u.id=m.user_id WHERE m.chat_id=? ORDER BY m.role,u.username').all(chat.id).map(m => ({ id:m.id, username:m.username, displayName:m.display_name, role:m.role })) };
+});
+
+route('PATCH', '/api/admin/chats/:id/category', ({ user, params, body }) => {
+  requireAdmin(user);
+  const chat = db.prepare("SELECT * FROM chats WHERE id=? AND type!='private'").get(intParam(params.id));
+  if (!chat) throw new HttpError(404, 'Server not found');
+  const category = str(body.category, 40, 'Category').trim();
+  db.prepare('UPDATE chats SET category=? WHERE id=?').run(category, chat.id);
+  for (const uid of memberIds(chat.id)) sendTo(uid, { type:'chat:refresh', chatId:chat.id });
+  logAdmin(user.id, 'set_server_category', chat.id, category);
+  return { data:{ category } };
+});
+
+route('PATCH', '/api/admin/chats/:id/permissions', ({ user, params, body }) => {
+  requireAdmin(user);
+  const chat = db.prepare("SELECT * FROM chats WHERE id=? AND type!='private'").get(intParam(params.id));
+  if (!chat) throw new HttpError(404, 'Server not found');
+  const fields = { membersCanInvite:'members_can_invite', membersCanPin:'members_can_pin', membersCanDelete:'members_can_delete' };
+  const sets=[], values=[];
+  for (const [key,col] of Object.entries(fields)) if (key in body) { sets.push(col+'=?'); values.push(body[key]?1:0); }
+  if (sets.length) db.prepare('UPDATE chats SET '+sets.join(',')+' WHERE id=?').run(...values,chat.id);
+  const updated=db.prepare('SELECT * FROM chats WHERE id=?').get(chat.id);
+  for (const uid of memberIds(chat.id)) sendTo(uid,{type:'chat:refresh',chatId:chat.id});
+  return { data:{ membersCanInvite:!!updated.members_can_invite, membersCanPin:!!updated.members_can_pin, membersCanDelete:!!updated.members_can_delete } };
+});
+
+route('PATCH', '/api/admin/chats/:id/members/:userId/role', ({ user, params, body }) => {
+  requireAdmin(user);
+  const chat = db.prepare("SELECT * FROM chats WHERE id=? AND type!='private'").get(intParam(params.id));
+  if (!chat) throw new HttpError(404, 'Server not found');
+  const targetId=intParam(params.userId);
+  const target=getMember(chat.id,targetId);
+  if (!target) throw new HttpError(404, 'Member not found');
+  const role=String(body.role||'');
+  if (!['owner','admin','member'].includes(role)) throw bad('Role must be owner, admin or member');
+  if (target.role==='owner' && role!=='owner') throw bad('Transfer ownership from the server owner first');
+  if (role==='owner') db.prepare("UPDATE members SET role='member' WHERE chat_id=? AND role='owner'").run(chat.id);
+  db.prepare('UPDATE members SET role=? WHERE chat_id=? AND user_id=?').run(role,chat.id,targetId);
+  for (const uid of memberIds(chat.id)) sendTo(uid,{type:'chat:refresh',chatId:chat.id});
+  logAdmin(user.id,'set_server_role',targetId,chat.title+': '+role);
+  return { data:{ok:true,role} };
+});
 route('DELETE', '/api/admin/chats/:id', ({ user, params }) => {
   requireAdmin(user);
   const chat = db.prepare('SELECT * FROM chats WHERE id=?').get(intParam(params.id));
