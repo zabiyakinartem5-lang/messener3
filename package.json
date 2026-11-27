@@ -6,7 +6,7 @@
     "build": "esbuild client/app.jsx client/boot.js --bundle --minify --jsx=automatic --define:process.env.NODE_ENV='\"production\"' --outdir=public",
     "start": "node --no-warnings server/index.js",
     "desktop": "electron desktop/main.cjs",
-    "desktop:build": "electron-builder --win nsis"
+    "desktop:build": "electron-builder --win nsis --publish never"
   },
   "engines": {
     "node": ">=22.5"
