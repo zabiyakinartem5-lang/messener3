@@ -3,8 +3,10 @@ const path = require('node:path');
 const fs = require('node:fs');
 
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
+const DEFAULT_SERVER_URL = 'https://messenger-ntpg.onrender.com';
 function readConfig() {
-  try { return JSON.parse(fs.readFileSync(configPath(), 'utf8')); } catch { return {}; }
+  try { return { serverUrl: DEFAULT_SERVER_URL, ...JSON.parse(fs.readFileSync(configPath(), 'utf8')) }; }
+  catch { return { serverUrl: DEFAULT_SERVER_URL }; }
 }
 function writeConfig(value) {
   fs.mkdirSync(path.dirname(configPath()), { recursive: true });
