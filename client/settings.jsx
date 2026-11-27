@@ -692,15 +692,37 @@ function GiftVault({ userId }) {
   const [listings,setListings]=useState([]);
   const [filter,setFilter]=useState('all');
   const [busy,setBusy]=useState({});
+  const [expanded,setExpanded]=useState({});
   async function load(){
     try{
       const [owned,market]=await Promise.all([api('GET',`/users/${userId}/gifts`),api('GET','/market?mine=1')]);
       setGifts(owned);setListings(market);
     }catch{setGifts([]);}
   }
-  useEffect(()=>{load();},[userId]);
+  useEffect(()=>{
+    load();
+    const refresh=()=>load();
+    window.addEventListener('gift-collection-updated',refresh);
+    return()=>window.removeEventListener('gift-collection-updated',refresh);
+  },[userId]);
   const listingByGift=new Map(listings.map(x=>[x.gift.id,x]));
   const list=(gifts||[]).filter(g=>filter==='favorites'?g.favorite:filter==='hidden'?g.hidden:filter==='market'?listingByGift.has(g.id):!g.hidden);
+  const grouped=new Map();
+  list.forEach(g=>{const key=g.type.slug||g.type.id; if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(g);});
+  const setGroups=[...grouped.entries()].filter(([,items])=>items.length>=4);
+  function renderGift(g){
+    const listing=listingByGift.get(g.id);const rarity=giftRarity(g);
+    return <div className="gift-vault-item backpack-item" key={g.id}>
+      <button className="gift-vault-open" onClick={()=>setModal({t:'gift',gift:g})}><GiftCard gift={g}/></button>
+      <div className="backpack-item-meta"><span className={'studio-rarity rarity-'+(rarity?.id||'common')}>{rarity?.icon||'🎁'} {rarity?.label||'Common'}</span>{listing&&<b className="listed-price">⭐ {listing.price.toLocaleString()}</b>}</div>
+      <div className="gift-vault-actions">
+        <button disabled={!!busy[g.id]} className={g.favorite?'active':''} title="Favorite" onClick={()=>change(g,{favorite:!g.favorite})}>{g.favorite?'♥':'♡'}</button>
+        <button disabled={!!busy[g.id]} title={g.hidden?'Unhide':'Hide'} onClick={()=>change(g,{hidden:!g.hidden})}>{g.hidden?'◉':'⊘'}</button>
+        {listing?<button disabled={!!busy[g.id]} className="sell" onClick={()=>unlist(g)}>Remove listing</button>:<button disabled={!!busy[g.id]} className="sell" onClick={()=>listForMarket(g)}>＋ Market</button>}
+        {!listing&&!g.hidden&&<button disabled={!!busy[g.id]} className="backpack-quick-sell" title="Sell to system for fixed price" onClick={()=>sell(g)}>⭐ Sell</button>}
+      </div>
+    </div>;
+  }
   async function change(g,patch){
     setBusy(v=>({...v,[g.id]:true}));
     try{const r=await api('PATCH',`/gifts/${g.id}/collection`,patch);setGifts(old=>old.map(x=>x.id===g.id?r:x));}
@@ -729,35 +751,35 @@ function GiftVault({ userId }) {
     try{const r=await api('POST',`/gifts/${g.id}/sell`);setMe({...me,stars:r.stars});setGifts(old=>old.filter(x=>x.id!==g.id));toast(`Sold for ⭐ ${r.soldPrice}`);}
     catch(e){toast(e.message);}finally{setBusy(v=>({...v,[g.id]:false}));}
   }
-  const rarityCount=(gifts||[]).filter(g=>!g.hidden&&giftRarity(g)?.id==='legendary'||!g.hidden&&giftRarity(g)?.id==='mythic').length;
-  return <div className="gift-vault">
-    <div className="backpack-hero">
+  const rarityCount=(gifts||[]).filter(g=>!g.hidden&&['legendary','mythic'].includes(giftRarity(g)?.id)).length;
+  const groupedIds=new Set(setGroups.flatMap(([,items])=>items.map(g=>g.id)));
+  return <div className="gift-vault liquid-glass">
+    <div className="backpack-hero glass-panel">
       <div className="backpack-icon">🎒</div>
       <div><b>Gift Backpack</b><small>Your personal collection · {gifts?.length||0} gifts</small></div>
       <div className="backpack-count"><strong>{(gifts||[]).filter(g=>!g.hidden).length}</strong><small>visible</small></div>
     </div>
     <div className="backpack-stats"><span>♥ {(gifts||[]).filter(g=>g.favorite).length} favorites</span><span>✦ {rarityCount} top rarity</span><span>🏷 {listings.length} on market</span></div>
-    <div className="gift-vault-tabs">
-      { [['all','🎁 All'],['favorites','♥ Favorites'],['hidden','◉ Hidden'],['market','🏷 On market']].map(([id,label])=><button key={id} className={filter===id?'on':''} onClick={()=>setFilter(id)}>{label}</button>)}
-    </div>
-    {!gifts?<div className="muted">Opening your backpack…</div>:!list.length?<div className="upgrade-empty">{filter==='favorites'?'No favorites yet. Tap ♡ on a gift to keep it close.':filter==='hidden'?'No hidden gifts.':filter==='market'?'You have no gifts listed for sale.':'Your backpack is empty. Send or buy your first gift!'}</div>:
-      <div className="gift-vault-grid">{list.map(g=>{
-        const listing=listingByGift.get(g.id);const rarity=giftRarity(g);
-        return <div className="gift-vault-item backpack-item" key={g.id}>
-          <button className="gift-vault-open" onClick={()=>setModal({t:'gift',gift:g})}><GiftCard gift={g}/></button>
-          <div className="backpack-item-meta"><span className={'studio-rarity rarity-'+(rarity?.id||'common')}>{rarity?.icon||'🎁'} {rarity?.label||'Common'}</span>{listing&&<b className="listed-price">⭐ {listing.price.toLocaleString()}</b>}</div>
-          <div className="gift-vault-actions">
-            <button disabled={!!busy[g.id]} className={g.favorite?'active':''} title="Favorite" onClick={()=>change(g,{favorite:!g.favorite})}>{g.favorite?'♥':'♡'}</button>
-            <button disabled={!!busy[g.id]} title={g.hidden?'Unhide':'Hide'} onClick={()=>change(g,{hidden:!g.hidden})}>{g.hidden?'◉':'⊘'}</button>
-            {listing?<button disabled={!!busy[g.id]} className="sell" onClick={()=>unlist(g)}>Remove listing</button>:<button disabled={!!busy[g.id]} className="sell" onClick={()=>listForMarket(g)}>＋ Market</button>}
-            {!listing&&!g.hidden&&<button disabled={!!busy[g.id]} className="backpack-quick-sell" title="Sell to system for fixed price" onClick={()=>sell(g)}>⭐ Sell</button>}
-          </div>
-        </div>;
-      })}</div>}
-    <small className="muted gift-vault-note">Hidden gifts are private. A listed gift stays in your backpack until another collector buys it.</small>
+    <div className="gift-vault-tabs glass-panel">{[['all','🎁 All'],['favorites','♥ Favorites'],['hidden','◉ Hidden'],['market','🏷 On market']].map(([id,label])=><button key={id} className={filter===id?'on':''} onClick={()=>setFilter(id)}>{label}</button>)}</div>
+    {!gifts?<div className="muted">Opening your backpack…</div>:!list.length?<div className="upgrade-empty">Your backpack is empty. Send or buy your first gift!</div>:
+      <div className="gift-vault-grid">
+        {list.filter(g=>!groupedIds.has(g.id)||grouped.get(g.type.slug||g.type.id)?.[0].id===g.id).map(g=>{
+          const items=grouped.get(g.type.slug||g.type.id)||[];
+          if(items.length<4)return renderGift(g);
+          const isOpen=!!expanded[g.type.slug||g.type.id];
+          return <div className="gift-set-wrap" key={'set-'+g.type.id}>
+            <button className="gift-set-cell glass-panel" onClick={()=>setExpanded(v=>({...v,[g.type.slug||g.type.id]:!v}))} aria-expanded={isOpen}>
+              <span className="gift-set-count">{items.length}×</span>
+              <span className="gift-set-icons">{items.slice(0,4).map((x,i)=><i key={x.id} style={{'--set-i':i}}>{x.type.emoji}</i>)}{items.length>4&&<em>+{items.length-4}</em>}</span>
+              <b>{g.type.name}</b><small>Набор · {items.length} подарка</small><span className="gift-set-open">{isOpen?'Свернуть':'Открыть набор'}⌄</span>
+            </button>
+            {isOpen&&<div className="gift-set-expanded">{items.map(renderGift)}</div>}
+          </div>;
+        })}
+      </div>}
+    <small className="muted gift-vault-note">Набор собирается автоматически из 4+ одинаковых подарков. Внутри каждый подарок остаётся отдельным предметом.</small>
   </div>;
 }
-
 function MarketPage({ back }) {
   const { me,setMe,toast }=useApp();
   const [rows,setRows]=useState(null);const [owned,setOwned]=useState([]);const [history,setHistory]=useState([]);
@@ -777,7 +799,7 @@ function MarketPage({ back }) {
   async function buy(item){
     if(!confirm('Buy '+item.gift.type.name+' for ⭐ '+item.price.toLocaleString()+'?'))return;
     setBusy(true);setErr('');
-    try{const r=await api('POST','/market/buy/'+item.id);setMe({...me,stars:r.stars});toast('Gift added to your backpack!');await load();}
+    try{const r=await api('POST','/market/buy/'+item.id);setMe({...me,stars:r.stars});if(r.gift){setOwned(old=>[r.gift,...old.filter(g=>g.id!==r.gift.id)]);window.dispatchEvent(new Event('gift-collection-updated'));}toast('Gift added to your backpack!');await load();}
     catch(e){setErr(e.message);}finally{setBusy(false);}
   }
   async function cancel(item){
