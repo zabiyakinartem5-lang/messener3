@@ -891,6 +891,7 @@ export function SettingsPanel() {
                 <Row icon="✨" label="Premium" value={me.premiumUntil > Date.now() ? 'Active' : ''} onClick={() => setPage('premium')} />
                 <Row icon="🎒" label="Gift Backpack" value={'⭐ ' + me.stars} onClick={() => setPage('gifts')} />
                 <Row icon="🛍" label="Gift Market" onClick={() => setPage('market')} />
+                <Row icon="🛍" label="Gift Market" onClick={() => setPage('market')} />
                 <Row icon="↩" label="Log out" danger onClick={() => confirm('Log out of Messenger?') && logout()} />
               </div>
             </div>
