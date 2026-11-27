@@ -869,7 +869,7 @@ function GiftsPage({ back }) {
 
 /* ---------- panel ---------- */
 export function SettingsPanel() {
-  const { me, closeSettings, logout, settingsStart, contacts } = useApp();
+  const { me, closeSettings, logout, settingsStart, contacts, settings, updateSettings } = useApp();
   const [page, setPage] = useState(settingsStart || 'main');
   const back = () => setPage('main');
   return (
@@ -883,8 +883,7 @@ export function SettingsPanel() {
         {page === 'privacy' && <PrivacyPage back={back} />}
         {page === 'contacts' && <ContactsPage back={back} />}
         {page === 'market' && <MarketPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
-        {page === 'gifts' && <GiftsPage back={(p) => (typeof p === 'string' ? setPage(p) : back())} />}
-        {page === 'upgrade-studio' && <GiftUpgradeStudio back={() => setPage('gifts')} />}
+                {page === 'upgrade-studio' && <GiftUpgradeStudio back={() => setPage('gifts')} />}
         {page === 'premium' && <PremiumPage back={() => setPage('gifts')} />}
         {page === 'rewards' && <RewardsPage back={back} />}
         {page === 'main' && (
@@ -901,6 +900,15 @@ export function SettingsPanel() {
                   {me.bio && <div className="s-bio">{me.bio}</div>}
                 </div>
               </button>
+              <section className="quick-preferences">
+                <div className="quick-preferences-head"><span>Quick controls</span><small>On this device</small></div>
+                <Toggle label="Message sounds" hint="Play a short sound for new messages" checked={settings.sound} onChange={(sound) => updateSettings({ sound })} />
+                <div className="quick-preferences-links">
+                  <button onClick={() => setPage('notifications')}>🔔 Notification settings <span>→</span></button>
+                  <button onClick={() => setPage('privacy')}>🔒 Privacy controls <span>→</span></button>
+                  <button onClick={() => setPage('appearance')}>🎨 Personalize appearance <span>→</span></button>
+                </div>
+              </section>
               <div className="s-list">
                 <Row icon="👤" label="My Account" onClick={() => setPage('account')} />
                 <Row icon="🤖" label="Assistant" onClick={() => setPage('ai')} />
@@ -911,7 +919,6 @@ export function SettingsPanel() {
                 <Row icon="🔒" label="Privacy" onClick={() => setPage('privacy')} />
                  <Row icon="🎡" label="Rewards" value="Wheel · Achievements" onClick={() => setPage('rewards')} />
                 <Row icon="✨" label="Premium" value={me.premiumUntil > Date.now() ? 'Active' : ''} onClick={() => setPage('premium')} />
-                <Row icon="🎒" label="Gift Backpack" value={'⭐ ' + me.stars} onClick={() => setPage('gifts')} />
                 <Row icon="🛍" label="Gift Market" onClick={() => setPage('market')} />
                 <Row icon="↩" label="Log out" danger onClick={() => confirm('Log out of Messenger?') && logout()} />
               </div>
