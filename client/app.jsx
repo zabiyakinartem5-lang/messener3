@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
+import QRCode from 'qrcode';
 import { createRoot } from 'react-dom/client';
 import { api, upload, getToken, setToken, timeOf, shortDate, dayLabel, lastSeen, fmtSize, preview } from './api.js';
 import { Ctx, useApp } from './ctx.js';
@@ -243,6 +244,47 @@ const BIG_EMOJI = /^(?:\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictograph
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉'];
 
+function QRProfileModal() {
+  const {me,setModal}=useApp(); const [src,setSrc]=useState(''); const [err,setErr]=useState('');
+  const link=location.origin+'/?add='+encodeURIComponent('@'+me.username);
+  useEffect(()=>{let live=true;QRCode.toDataURL(link,{width:280,margin:2,errorCorrectionLevel:'M'}).then(x=>live&&setSrc(x)).catch(e=>setErr(e.message));return()=>{live=false;};},[link]);
+  return <Modal title="Share your profile" onClose={()=>setModal(null)}>
+    <div className="qr-profile"><b>@{me.username}</b>{src?<img src={src} alt="Profile QR code"/>:<p>{err||'Generating QR code…'}</p>}<a href={link}>{link}</a><button className="primary" onClick={()=>navigator.clipboard?.writeText(link)}>Copy profile link</button></div>
+  </Modal>;
+}
+function MediaCenterModal({chatId}) {
+  const {setModal,toast}=useApp(); const [kind,setKind]=useState('all'); const [items,setItems]=useState([]); const [busy,setBusy]=useState(false);
+  useEffect(()=>{let live=true;setBusy(true);api('GET','/chats/'+chatId+'/media?kind='+kind).then(x=>live&&setItems(x)).catch(e=>toast(e.message)).finally(()=>live&&setBusy(false));return()=>{live=false;};},[chatId,kind]);
+  return <Modal title="Chat media" onClose={()=>setModal(null)}>
+    <div className="media-tabs">{[['all','All'],['images','Photos'],['video','Videos'],['files','Files']].map(([id,label])=><button className={kind===id?'on':''} key={id} onClick={()=>setKind(id)}>{label}</button>)}</div>
+    {busy?<p className="muted">Loading…</p>:!items.length?<p className="muted">No shared files yet</p>:<div className="media-grid">{items.map(x=><a key={x.id} href={x.url} target="_blank" rel="noreferrer" className="media-item">{x.mime.startsWith('image/')?<img src={x.url} alt={x.name}/>:x.mime.startsWith('video/')?<video src={x.url} muted/>:<span>📄</span>}<small>{x.name}</small></a>)}</div>}
+  </Modal>;
+}
+function CallModal({chatId,incoming}) {
+  const {chats,wsSend,setModal,toast}=useApp(); const chat=chats.find(x=>x.id===chatId);
+  const pc=useRef(null),local=useRef(null),remote=useRef(null),localStream=useRef(null);
+  const [status,setStatus]=useState(incoming?'Incoming call':'Calling…'); const [accepted,setAccepted]=useState(!incoming);
+  const send=(signal)=>wsSend({type:'call:signal',chatId,signal});
+  const cleanup=()=>{try{pc.current?.close();}catch{};localStream.current?.getTracks().forEach(t=>t.stop());};
+  async function setup(){
+    if(pc.current)return pc.current;
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:true});localStream.current=stream;
+    if(local.current)local.current.srcObject=stream;
+    const conn=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});pc.current=conn;
+    stream.getTracks().forEach(t=>conn.addTrack(t,stream));
+    conn.ontrack=e=>{if(remote.current)remote.current.srcObject=e.streams[0];};
+    conn.onicecandidate=e=>{if(e.candidate)send({type:'candidate',candidate:e.candidate});};
+    conn.onconnectionstatechange=()=>setStatus(({connected:'Connected',connecting:'Connecting…',disconnected:'Connection interrupted',failed:'Connection failed',closed:'Call ended'})[conn.connectionState]||'Calling…');
+    return conn;
+  }
+  async function start(){try{const conn=await setup();const offer=await conn.createOffer();await conn.setLocalDescription(offer);send({type:'offer',sdp:offer});setAccepted(true);setStatus('Calling…');}catch(e){toast(e.message||'Camera or microphone permission required');}}
+  async function accept(){try{const conn=await setup();await conn.setRemoteDescription(incoming.sdp);const answer=await conn.createAnswer();await conn.setLocalDescription(answer);send({type:'answer',sdp:answer});setAccepted(true);setStatus('Connecting…');}catch(e){toast(e.message||'Could not accept call');}}
+  useEffect(()=>{if(!incoming)start();return()=>cleanup();},[]);
+  useEffect(()=>{const handler=async ev=>{const s=ev.detail;if(s.chatId!==chatId)return;try{if(s.signal.type==='answer'&&pc.current)await pc.current.setRemoteDescription(s.signal.sdp);else if(s.signal.type==='candidate'&&pc.current)await pc.current.addIceCandidate(s.signal.candidate);else if(s.signal.type==='end'){setStatus('Call ended');cleanup();setModal(null);}}catch(e){toast('Call connection error: '+e.message);}};window.addEventListener('messenger-call-signal',handler);return()=>window.removeEventListener('messenger-call-signal',handler);},[chatId]);
+  function end(){send({type:'end'});cleanup();setModal(null);}
+  return <Modal title={'Call · '+(chat?.title||'Chat')} onClose={end}><div className="call-stage"><video ref={remote} autoPlay playsInline className="call-remote"/><video ref={local} autoPlay muted playsInline className="call-local"/>{!accepted&&<div className="call-incoming"><b>{chat?.title||'Incoming call'}</b><button className="primary" onClick={accept}>Accept call</button></div>}</div><p className="muted call-status">{status}</p><button className="danger" onClick={end}>End call</button><small className="muted">Peer-to-peer video. Camera and microphone permissions are required; network/firewall settings may affect connection.</small></Modal>;
+}
+
 function PollBlock({ poll, messageId }) {
   const { updatePoll, toast } = useApp();
   const [selected,setSelected] = useState(poll.myVotes || []);
@@ -270,6 +312,17 @@ function PollBlock({ poll, messageId }) {
 function Message({ m, mine, showSender, chat, fresh, onReply, onEdit, onDelete, onOpenGift, onOpenUser, jumpTo }) {
   const { settings, removeKept, react, me, toast } = useApp();
   const [pick, setPick] = useState(false);
+  const [translated,setTranslated]=useState('');
+  const [transBusy,setTransBusy]=useState(false);
+  async function translateText(){
+    if(translated){setTranslated('');return;}
+    const source=prompt('Source language code (for example en, pl, ru)','en');if(!source)return;
+    const target=(navigator.language||'en').split('-')[0];
+    setTransBusy(true);
+    try{const u='https://api.mymemory.translated.net/get?q='+encodeURIComponent(m.text)+'&langpair='+encodeURIComponent(source+'|'+target);const r=await fetch(u);const d=await r.json();if(d.responseStatus!==200)throw new Error(d.responseDetails||'Translation unavailable');setTranslated(d.responseData.translatedText);}
+    catch(e){toast('Translation service error: '+e.message);}
+    finally{setTransBusy(false);}
+  }
   if (m.kind === 'system') return <div className="sys-msg"><span>{m.text}</span></div>;
   const canEdit = mine && (m.kind === 'text' || m.kind === 'file') && !m.deleted;
   const canDelete = !m.deleted && !m.keptDeleted && (mine || (chat.type !== 'private' && (chat.role === 'owner' || chat.role === 'admin')));
@@ -297,6 +350,9 @@ function Message({ m, mine, showSender, chat, fresh, onReply, onEdit, onDelete, 
             {m.file && <FileBlock file={m.file} />}
             {m.poll && <PollBlock poll={m.poll} messageId={m.id} />}
             {m.text && !m.poll && (bigEmoji ? <div className="big-emoji">{m.text.trim()}</div> : m.sender.isBot ? <div className="text"><Markdown text={m.text} /></div> : <div className="text">{m.text}</div>)}
+            {translated && <div className="translated-text">🌐 {translated}</div>}
+            {m.noForward && <small className="secret-label">🔒 Forwarding restricted</small>}
+            {m.expiresAt && <small className="secret-label">⏳ Disappears {new Date(m.expiresAt).toLocaleString()}</small>}
           </>
         )}
         {!m.deleted && m.reactions?.length > 0 && (
@@ -314,6 +370,7 @@ function Message({ m, mine, showSender, chat, fresh, onReply, onEdit, onDelete, 
         </div>
         {!m.deleted && (
           <div className="actions">
+            {m.text && !m.poll && <button onClick={translateText} disabled={transBusy} title="Translate message">{transBusy?'…':translated?'↩':'🌐'}</button>}
             {!m.keptDeleted && <button onClick={() => setPick((v) => !v)} title="React" aria-label="React" aria-expanded={pick}>☺</button>}
             {chat.canPost && !m.keptDeleted && <button onClick={() => onReply(m)} title="Reply" aria-label="Reply">↩</button>}
             {canEdit && <button onClick={() => onEdit(m)} title="Edit" aria-label="Edit">✎</button>}
@@ -344,6 +401,8 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
   const fileIn = useRef(null);
   const [emoji, setEmoji] = useState(false);
   const [stickers, setStickers] = useState(false);
+  const [expireHours,setExpireHours] = useState(0);
+  const [noForward,setNoForward] = useState(false);
   const { setModal } = useApp();
 
   const draftKey = 'messenger-draft:' + chat.id;
@@ -380,7 +439,7 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
     const t = text.trim();
     if (!t || busy) return;
     setBusy(true); setErr('');
-    try { await onSend({ text: t }); setText(''); if (!editing) clearDraft(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+    try { await onSend({ text: t, expireHours, noForward }); setText(''); if (!editing) clearDraft(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
   async function pick(e) {
     const f = e.target.files?.[0];
@@ -389,7 +448,7 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
     setBusy(true); setErr('');
     try {
       const up = await upload(f);
-      await onSend({ text: text.trim(), fileId: up.id });
+      await onSend({ text: text.trim(), fileId: up.id, expireHours, noForward });
       setText(''); clearDraft();
     } catch (x) { setErr(x.message); } finally { setBusy(false); }
   }
@@ -416,7 +475,7 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
       setBusy(true);
       try {
         const up = await upload(new File([blob], 'voice.' + (blob.type.includes('ogg') ? 'ogg' : 'webm'), { type: blob.type.split(';')[0] }));
-        await onSend({ text: '', fileId: up.id });
+        await onSend({ text: '', fileId: up.id, expireHours, noForward });
       } catch (x) { setErr(x.message); } finally { setBusy(false); }
     };
     r.recorder.stop();
@@ -434,6 +493,7 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
         </div>
       )}
       {err && <div className="error small" role="alert">{err}</div>}
+      {!editing && <div className="secret-compose"><label>⏳ Auto-delete <select value={expireHours} onChange={e=>setExpireHours(Number(e.target.value))}><option value={0}>Off</option><option value={1}>1 hour</option><option value={24}>24 hours</option><option value={168}>7 days</option></select></label><label><input type="checkbox" checked={noForward} onChange={e=>setNoForward(e.target.checked)}/> 🔒 Restrict copying</label></div>}
       <div className="composer">
         {rec ? (
           <>
@@ -555,6 +615,8 @@ function ChatView() {
           <Avatar name={chat.title} color={chatColor(chat)} size={42} src={chat.peer?.avatar} />
           <div><div className="head-title">{chat.type === 'private' && chat.peer ? nameFor(me, chat.peer) : chat.title}{isBot && <span className="bot-tag">bot</span>}{chat.peer?.statusEmoji && <span className="status-emoji">{chat.peer.statusEmoji}</span>}</div><div className={'head-sub' + (t || chat.peer?.online || (isBot && aiInfo?.online) ? ' live' : '')}>{sub}</div></div>
         </button>
+        {chat.type==='private'&&!isBot&&<button className="icon-btn" onClick={()=>setModal({t:'call',chatId:chat.id})} title="Start video call" aria-label="Start video call">📹</button>}
+        <button className="icon-btn" onClick={()=>setModal({t:'media',chatId:chat.id})} title="Shared media" aria-label="Shared media">🖼</button>
         <button className="icon-btn chat-theme-btn" title="Personal chat theme" aria-label="Change chat theme" onClick={()=>{const i=themes.indexOf(currentTheme);setChatPreference(chat.id,{theme:themes[(i+1)%themes.length]});}}>🎨</button>
         {isBot && <button className="gift-head" onClick={() => sendMessage(chat.id, { text: '/new' })} aria-label="New conversation" title="Forget the context and start fresh">✨ New chat</button>}
         {isBot && <button className="icon-btn" onClick={async () => { if (confirm('Delete the whole conversation with the assistant?')) { await api('POST', '/ai/clear'); } }} aria-label="Clear conversation" title="Clear conversation">🗑</button>}
@@ -1083,7 +1145,8 @@ function App() {
         if (e.type === 'ready') {
           refreshChats();
           if (activeRef.current) loadMessages(activeRef.current).catch(() => {});
-        } else if (e.type === 'presence') {
+        } else if(e.type==='call:signal') { window.dispatchEvent(new CustomEvent('messenger-call-signal',{detail:e})); if(e.signal?.type==='offer')setModal({t:'call',chatId:e.chatId,incoming:e.signal}); }
+        else if (e.type === 'presence') {
           setChats((cs) => cs.map((c) => (c.peer?.id === e.userId ? { ...c, peer: { ...c.peer, online: e.online, lastSeen: e.lastSeen ?? c.peer.lastSeen } } : c)));
         } else if (e.type === 'user:update') {
           const u = e.user;
@@ -1195,6 +1258,9 @@ function App() {
       {modal?.t === 'poll-create' && <CreatePollModal chatId={modal.chatId} />}
       {modal?.t === 'devices' && <DevicesModal />}
       {modal?.t === 'privacy' && <PrivacyModal />}
+      {modal?.t === 'qr-profile' && <QRProfileModal />}
+      {modal?.t === 'media' && <MediaCenterModal chatId={modal.chatId} />}
+      {modal?.t === 'call' && <CallModal chatId={modal.chatId} incoming={modal.incoming} />}
       {announce && <div className="announce" role="alert"><span>📣 {announce}</span><button onClick={() => setAnnounce(null)} aria-label="Dismiss announcement">✕</button></div>}
       {modal?.t === 'shop' && <GiftShop chatId={modal.chatId} self={modal.self} modal={modal} />}
       {modal?.t === 'gift' && <GiftDetail gift={modal.gift} key={modal.gift.id} />}
