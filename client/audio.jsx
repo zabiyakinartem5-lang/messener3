@@ -41,7 +41,7 @@ export function AudioMessage({ file }) {
           <i style={{ width: frac * 100 + '%' }} />
         </div>
         <small>{mine ? fmt(a.time) + (a.dur ? ' / ' + fmt(a.dur) : '') : ''}</small>
-        <button className="audio-rate" onClick={() => setPlaybackRate(nextRate)} title="Playback speed">{mine ? a.rate + '×' : '1×'}</button>
+        <button className="audio-rate" disabled={!mine} onClick={() => setPlaybackRate(nextRate)} title="Playback speed">{mine ? a.rate + '×' : '1×'}</button>
       </div>
     </div>
   );
