@@ -151,7 +151,7 @@ function SearchResults({ q, onOpenUser, onOpenChat }) {
 }
 
 function Sidebar() {
-  const { chats, activeId, openChat, openPrivate, joinChat, me, setMe, toast, setModal, openSettings, chatPrefs, folders, setChatPreference, settings, updateSettings } = useApp();
+  const { chats, activeId, openChat, openPrivate, joinChat, me, setMe, toast, setModal, openSettings, chatPrefs, folders, setChatPreference, refreshChatPrefs, settings, updateSettings } = useApp();
   const toggleGhost = async () => {
     try { const u = await api('PATCH', '/me', { ghost: !me.ghost }); setMe(u); toast(u.ghost ? 'Ghost mode on 👻' : 'Ghost mode off'); } catch (e) { toast(e.message); }
   };
@@ -214,7 +214,7 @@ function Sidebar() {
         ) : chats.length ? (
           shownChats.length ? shownChats.map((c) => <ChatRow key={c.id} c={c} active={c.id === activeId} pinned={pinned.includes(c.id)} favorite={!!chatPrefs[c.id]?.favorite}
             onTogglePin={() => togglePin(c.id)} onToggleFavorite={()=>setChatPreference(c.id,{favorite:!chatPrefs[c.id]?.favorite})}
-            onMoveFolder={()=>{const current=chatPrefs[c.id]?.folderId;const idx=folders.findIndex(x=>x.id===current);const next=folders[(idx+1)%Math.max(1,folders.length)];setChatPreference(c.id,{folderId:current?null:(next?.id??null)});}}
+            onMoveFolder={()=>{const ids=[null,...folders.map(x=>x.id)];const current=chatPrefs[c.id]?.folderId??null;const idx=ids.indexOf(current);setChatPreference(c.id,{folderId:ids[(idx+1)%ids.length]});}}
             onClick={() => openChat(c.id)} />) : <div className="empty-note">Nothing here.</div>
         ) : (
           <div className="empty-note">No chats yet.<br />Search for a username to start one, or create a group.</div>
@@ -1176,7 +1176,7 @@ function App() {
   if (!me) return <Auth onAuth={setMe} />;
 
   const ctx = {
-    me, setMe, chats, activeId, messages, typing, setModal, toast, wsSend, chatPrefs, folders, setChatPreference, updatePoll,
+    me, setMe, chats, activeId, messages, typing, setModal, toast, wsSend, chatPrefs, folders, setChatPreference, refreshChatPrefs, updatePoll,
     openChat, openPrivate, joinChat, leaveChat, closeChat: () => setActiveId(null), logout,
     sendMessage, editMessage, deleteMessage, loadOlder, mergeMessage, mergeGift, giftsVersion, react, refreshChats,
     settings, updateSettings, settingsStart: settingsOpen,
