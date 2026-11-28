@@ -1981,7 +1981,7 @@ wss.on('connection', (ws) => {
         const room=voiceRooms.get(roomKey);
         if(room){room.delete(userId);for(const peer of room)sendTo(peer,{type:'voice:peer-left',chatId,userId});if(!room.size)voiceRooms.delete(roomKey);}
       }else{
-        const room=global.voiceRooms?.get(roomKey);
+        const room=voiceRooms.get(roomKey);
         if(!room||!room.has(userId)||!msg.to||!room.has(Number(msg.to))||!msg.signal||typeof msg.signal!=='object')return;
         if(!['offer','answer','candidate'].includes(msg.signal.type)||JSON.stringify(msg.signal).length>12000)return;
         sendTo(Number(msg.to),{type:'voice:signal',chatId,from:userId,signal:msg.signal});
