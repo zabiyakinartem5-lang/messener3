@@ -707,6 +707,45 @@ route('GET', '/api/chats/:id/media', ({ user, params, url }) => {
   return {data:rows.filter(x=>kind==='all'||(kind==='images'?x.mime.startsWith('image/'):kind==='video'?x.mime.startsWith('video/'):!x.mime.startsWith('image/')&&!x.mime.startsWith('video/'))).map(x=>({...x,url:'/files/'+x.id}))};
 });
 
+
+/* ------------------------- Stories and sync ------------------------- */
+route('GET', '/api/stories', ({ user }) => {
+  const rows=db.prepare(`SELECT s.*,u.username,u.display_name,u.color,u.avatar_file
+    FROM stories s JOIN users u ON u.id=s.user_id
+    WHERE s.expires_at>? ORDER BY s.created_at DESC LIMIT 100`).all(now());
+  return {data:rows.map(x=>({id:x.id,userId:x.user_id,username:x.username,displayName:x.display_name,color:x.color,
+    avatar:x.avatar_file?'/files/'+x.avatar_file:null,text:x.text,background:x.background,createdAt:x.created_at,expiresAt:x.expires_at,mine:x.user_id===user.id}))};
+});
+route('POST', '/api/stories', ({ user, body }) => {
+  const text=str(body.text,280,'Story');
+  if(!text)throw bad('Story text is required');
+  const backgrounds=['blue','violet','sunset','green','dark'];
+  const background=backgrounds.includes(body.background)?body.background:'blue';
+  const created=now(), expires=created+24*3600000;
+  const r=db.prepare('INSERT INTO stories (user_id,text,background,created_at,expires_at) VALUES (?,?,?,?,?)').run(user.id,text,background,created,expires);
+  const story={id:Number(r.lastInsertRowid),userId:user.id,username:user.username,displayName:user.display_name,color:user.color,text,background,createdAt:created,expiresAt:expires,mine:true};
+  broadcastAll({type:'stories:refresh'});
+  return {status:201,data:story};
+});
+route('DELETE', '/api/stories/:id', ({ user, params }) => {
+  const changed=db.prepare('DELETE FROM stories WHERE id=? AND user_id=?').run(intParam(params.id),user.id).changes;
+  if(!changed)throw new HttpError(404,'Story not found');
+  broadcastAll({type:'stories:refresh'});
+  return {data:{ok:true}};
+});
+route('GET', '/api/sync', ({ user }) => {
+  const rows=db.prepare('SELECT sync_key,value,updated_at FROM user_sync WHERE user_id=?').all(user.id);
+  return {data:Object.fromEntries(rows.map(x=>[x.sync_key,{value:JSON.parse(x.value),updatedAt:x.updated_at}]))};
+});
+route('PUT', '/api/sync/:key', ({ user, params, body }) => {
+  const key=str(params.key,40,'Sync key');
+  if(!['settings','drafts','chat-preferences'].includes(key))throw bad('Unsupported sync key');
+  const value=JSON.stringify(body.value);
+  if(value.length>50000)throw new HttpError(413,'Synced data is too large');
+  db.prepare('INSERT INTO user_sync (user_id,sync_key,value,updated_at) VALUES (?,?,?,?) ON CONFLICT(user_id,sync_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at').run(user.id,key,value,now());
+  return {data:{ok:true,updatedAt:now()}};
+});
+
 /* ---------------------------- Messages ----------------------------- */
 route('PATCH', '/api/messages/:id', ({ user, params, body }) => {
   const m = db.prepare('SELECT * FROM messages WHERE id=?').get(intParam(params.id));
@@ -1923,6 +1962,30 @@ wss.on('connection', (ws) => {
       const signal=JSON.stringify(msg.signal);
       if(signal.length>12000)return;
       sendTo(peer,{type:'call:signal',chatId,from:userId,signal:msg.signal});
+      return;
+    }
+    if(msg.type==='voice:join'||msg.type==='voice:leave'||msg.type==='voice:signal'){
+      const chatId=Number(msg.chatId);
+      if(!Number.isInteger(chatId))return;
+      try{requireMember(chatId,userId);}catch{return;}
+      const roomKey=String(chatId);
+      if(msg.type==='voice:join'){
+        if(!global.voiceRooms)global.voiceRooms=new Map();
+        if(!global.voiceRooms.has(roomKey))global.voiceRooms.set(roomKey,new Set());
+        const room=global.voiceRooms.get(roomKey);
+        const peers=[...room].filter(id=>id!==userId);
+        room.add(userId);
+        sendTo(userId,{type:'voice:peers',chatId,peers});
+        for(const peer of peers)sendTo(peer,{type:'voice:peer-joined',chatId,userId});
+      }else if(msg.type==='voice:leave'){
+        const room=global.voiceRooms?.get(roomKey);
+        if(room){room.delete(userId);for(const peer of room)sendTo(peer,{type:'voice:peer-left',chatId,userId});if(!room.size)global.voiceRooms.delete(roomKey);}
+      }else{
+        const room=global.voiceRooms?.get(roomKey);
+        if(!room||!room.has(userId)||!msg.to||!room.has(Number(msg.to))||!msg.signal||typeof msg.signal!=='object')return;
+        if(!['offer','answer','candidate'].includes(msg.signal.type)||JSON.stringify(msg.signal).length>12000)return;
+        sendTo(Number(msg.to),{type:'voice:signal',chatId,from:userId,signal:msg.signal});
+      }
       return;
     }
     if (msg.type === 'typing') {
