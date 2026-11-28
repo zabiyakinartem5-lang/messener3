@@ -139,11 +139,11 @@ function reactionsOf(messageId) {
   return [...map].map(([emoji, users]) => ({ emoji, count: users.length, users: users.slice(0, 50) }));
 }
 
-function messageView(m, depth = 0) {
+function messageView(m, depth = 0, viewerId = null) {
   const v = {
     id: m.id, chatId: m.chat_id, kind: m.kind, deleted: !!m.deleted,
     text: m.deleted ? '' : m.text, createdAt: m.created_at, editedAt: m.edited_at,
-    poll: (!m.deleted && depth === 0) ? pollView(m.id, null) : null,
+    poll: (!m.deleted && depth === 0) ? pollView(m.id, viewerId) : null,
     sender: miniUser(getUser(m.sender_id)), replyTo: null, file: null, gift: null,
     reactions: m.deleted ? [] : reactionsOf(m.id),
   };
@@ -152,7 +152,7 @@ function messageView(m, depth = 0) {
     if (m.gift_id) v.gift = giftView(m.gift_id);
     if (m.reply_to && depth === 0) {
       const r = db.prepare('SELECT * FROM messages WHERE id=? AND chat_id=?').get(m.reply_to, m.chat_id);
-      if (r) v.replyTo = messageView(r, 1);
+      if (r) v.replyTo = messageView(r, 1, viewerId);
     }
   }
   return v;
@@ -647,12 +647,17 @@ route('GET', '/api/chats/:id/messages', ({ user, params, url }) => {
   const rows = before
     ? db.prepare('SELECT * FROM messages WHERE chat_id=? AND id<? ORDER BY id DESC LIMIT ?').all(chat.id, before, limit)
     : db.prepare('SELECT * FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT ?').all(chat.id, limit);
-  return { data: { messages: rows.reverse().map((r) => messageView(r)), hasMore: rows.length === limit } };
+  return { data: { messages: rows.reverse().map((r) => messageView(r, 0, user.id)), hasMore: rows.length === limit } };
 });
 
 route('POST', '/api/chats/:id/messages', ({ user, params, body }) => {
   const { chat, member } = requireMember(intParam(params.id), user.id);
   if (!canPost(chat, member)) throw new HttpError(403, 'Only admins can post in this channel');
+  if (chat.type === 'private') {
+    const peer=db.prepare('SELECT user_id FROM members WHERE chat_id=? AND user_id!=?').get(chat.id,user.id)?.user_id;
+    if (peer && (db.prepare('SELECT 1 FROM blocked_users WHERE owner_id=? AND blocked_id=?').get(peer,user.id) ||
+      db.prepare('SELECT 1 FROM blocked_users WHERE owner_id=? AND blocked_id=?').get(user.id,peer))) throw new HttpError(403,'Messaging is unavailable because one of the users has blocked the other');
+  }
   const text = str(body.text, MAX_TEXT, 'Message');
   let fileId = null;
   if (body.fileId) {
@@ -1690,14 +1695,15 @@ route('PATCH','/api/chats/:id/preferences',({user,params,body})=>{
 route('GET','/api/sessions',({user,token})=>{
   db.prepare('UPDATE sessions SET last_active=? WHERE token=?').run(now(),token);
   return {data:db.prepare('SELECT token,device,created_at AS createdAt,last_active AS lastActive FROM sessions WHERE user_id=? ORDER BY last_active DESC').all(user.id)
-    .map(s=>({...s,current:s.token===token,token:undefined}))};
+    .map(s=>({id:crypto.createHash('sha256').update(s.token).digest('hex').slice(0,20),device:s.device,createdAt:s.createdAt,lastActive:s.lastActive,current:s.token===token}))};
 });
 route('DELETE','/api/sessions/:token',({user,token,params})=>{
-  const target=String(params.token);
-  const row=db.prepare('SELECT token FROM sessions WHERE token=? AND user_id=?').get(target,user.id);
+  const id=String(params.token);
+  const rows=db.prepare('SELECT token FROM sessions WHERE user_id=?').all(user.id);
+  const row=rows.find(s=>crypto.createHash('sha256').update(s.token).digest('hex').slice(0,20)===id);
   if(!row) throw new HttpError(404,'Session not found');
-  if(target===token) throw bad('Use Log out to end the current session');
-  db.prepare('DELETE FROM sessions WHERE token=?').run(target);
+  if(row.token===token) throw bad('Use Log out to end the current session');
+  db.prepare('DELETE FROM sessions WHERE token=?').run(row.token);
   return {data:{ok:true}};
 });
 route('POST','/api/sessions/revoke-others',({user,token})=>{
@@ -1729,7 +1735,7 @@ route('POST','/api/chats/:id/polls',({user,params,body})=>{
   const pollId=Number(p.lastInsertRowid);
   const ins=db.prepare('INSERT INTO poll_options(poll_id,label,position) VALUES(?,?,?)');
   opts.forEach((label,i)=>ins.run(pollId,label,i));
-  const view=messageView(row); view.poll=pollView(row.id,user.id);
+  const view=messageView(row,0,user.id); view.poll=pollView(row.id,user.id);
   toChat(chatId,{type:'message:new',message:view});
   return {status:201,data:view};
 });
