@@ -191,6 +191,9 @@ function Sidebar() {
                 <button onClick={() => { setMenu(false); setModal({t:'privacy'}); }}>🛡 Privacy</button>
                 <button onClick={() => { setMenu(false); setModal({t:'devices'}); }}>💻 Devices</button>
                 <button onClick={() => { setMenu(false); setModal({t:'qr-profile'}); }}>▦ Share profile QR</button>
+                <button onClick={() => { setMenu(false); setModal({t:'stories'}); }}>◉ Stories</button>
+                <button onClick={() => { setMenu(false); setModal({t:'user-id'}); }}>🔎 Find by user ID</button>
+                <button onClick={() => { setMenu(false); setModal({t:'sync'}); }}>☁️ Device sync</button>
                 <button onClick={() => { const on=settings.quietUntil>Date.now(); updateSettings({quietUntil:on?0:Date.now()+8*3600000});setMenu(false);toast(on?'Quiet mode off':'Quiet mode on for 8 hours'); }}>🌙 {settings.quietUntil>Date.now()?'Turn off quiet mode':'Quiet mode · 8 hours'}</button>
                 <button onClick={() => { setMenu(false); openSettings('main'); }}>⚙️ Settings</button>
               </div>
@@ -286,6 +289,43 @@ function CallModal({chatId,incoming}) {
   return <Modal title={'Call · '+(chat?.title||'Chat')} onClose={end}><div className="call-stage"><video ref={remote} autoPlay playsInline className="call-remote"/><video ref={local} autoPlay muted playsInline className="call-local"/>{!accepted&&<div className="call-incoming"><b>{chat?.title||'Incoming call'}</b><button className="primary" onClick={accept}>Accept call</button></div>}</div><p className="muted call-status">{status}</p><button className="danger" onClick={end}>End call</button><small className="muted">Peer-to-peer video. Camera and microphone permissions are required; network/firewall settings may affect connection.</small></Modal>;
 }
 
+
+function StoriesModal(){
+  const {me,setModal,toast}=useApp();const [stories,setStories]=useState([]);const [text,setText]=useState('');const [background,setBackground]=useState('blue');
+  const load=()=>api('GET','/stories').then(setStories).catch(e=>toast(e.message));
+  useEffect(()=>{load();const h=()=>load();window.addEventListener('messenger-stories-refresh',h);return()=>window.removeEventListener('messenger-stories-refresh',h);},[]);
+  async function publish(){try{await api('POST','/stories',{text,background});setText('');load();toast('Story published · visible for 24 hours');}catch(e){toast(e.message);}}
+  return <Modal title="Stories" onClose={()=>setModal(null)} wide><div className="story-compose"><textarea maxLength={280} value={text} onChange={e=>setText(e.target.value)} placeholder="Share a short update…"/><div className="story-colors">{['blue','violet','sunset','green','dark'].map(x=><button key={x} className={'story-color '+x+(background===x?' on':'')} onClick={()=>setBackground(x)} aria-label={x}/>)}</div><button className="primary" disabled={!text.trim()} onClick={publish}>＋ Add story</button></div><div className="story-list">{stories.map(s=><article className={'story-card '+s.background} key={s.id}><small>{s.mine?'Your story':'@'+s.username} · {new Date(s.createdAt).toLocaleString()}</small><p>{s.text}</p>{s.mine&&<button onClick={async()=>{try{await api('DELETE','/stories/'+s.id);load();}catch(e){toast(e.message);}}}>Delete</button>}</article>)}</div>{!stories.length&&<p className="muted">No active stories yet.</p>}</Modal>;
+}
+function UserIdModal(){
+  const {setModal,openPrivate,toast}=useApp();const [id,setId]=useState('');const [user,setUser]=useState(null);const [busy,setBusy]=useState(false);
+  async function find(){setBusy(true);setUser(null);try{const u=await api('GET','/users/'+encodeURIComponent(id.trim()));setUser(u);}catch(e){toast(e.message);}finally{setBusy(false);}}
+  return <Modal title="Find user by ID" onClose={()=>setModal(null)}><div className="id-search"><input inputMode="numeric" value={id} onChange={e=>setId(e.target.value.replace(/\D/g,''))} placeholder="Enter numeric user ID"/><button className="primary" disabled={!id||busy} onClick={find}>{busy?'Searching…':'Find'}</button>{user&&<div className="id-user"><Avatar name={user.displayName} color={user.color} src={user.avatar}/><div><b>{user.displayName}</b><small>@{user.username} · ID {user.id}</small></div><button className="primary" onClick={()=>{setModal(null);openPrivate(user.id);}}>Message</button></div>}</div></Modal>;
+}
+function SyncModal(){
+  const {setModal,toast,settings,updateSettings}=useApp();const [remote,setRemote]=useState(null);const [busy,setBusy]=useState(false);
+  useEffect(()=>{api('GET','/sync').then(setRemote).catch(e=>toast(e.message));},[]);
+  async function push(){setBusy(true);try{await api('PUT','/sync/settings',{value:settings});toast('Settings synced to your account');}catch(e){toast(e.message);}finally{setBusy(false);}}
+  async function pull(){setBusy(true);try{const x=await api('GET','/sync');if(x.settings?.value){updateSettings(x.settings.value);toast('Settings restored from your account');}else toast('No saved settings found');}catch(e){toast(e.message);}finally{setBusy(false);}}
+  return <Modal title="Device sync" onClose={()=>setModal(null)}><p className="muted">Save appearance and notification preferences to your account so they can be restored on another signed-in device.</p><div className="sync-actions"><button className="primary" disabled={busy} onClick={push}>☁️ Save this device's settings</button><button className="primary ghosty" disabled={busy} onClick={pull}>↙ Restore from account</button></div><small className="muted">{remote?.settings?'A settings snapshot is saved in your account.':'No settings snapshot saved yet.'} Drafts and chat messages are not uploaded.</small></Modal>;
+}
+function MiniGamesModal(){
+  const {setModal}=useApp();const [cells,setCells]=useState(Array(9).fill(''));const [turn,setTurn]=useState('X');const [winner,setWinner]=useState('');
+  const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  function play(i){if(cells[i]||winner)return;const next=cells.slice();next[i]=turn;setCells(next);const win=lines.some(([a,b,c])=>next[a]&&next[a]===next[b]&&next[b]===next[c]);setWinner(win?turn:next.every(Boolean)?'draw':'');setTurn(turn==='X'?'O':'X');}
+  function reset(){setCells(Array(9).fill(''));setTurn('X');setWinner('');}
+  return <Modal title="Mini games" onClose={()=>setModal(null)}><p className="muted">Tic-tac-toe · two players on this device</p><div className="game-status">{winner?(winner==='draw'?'Draw!':'Winner: '+winner):'Turn: '+turn}</div><div className="tic-grid">{cells.map((x,i)=><button key={i} onClick={()=>play(i)} disabled={!!x||!!winner}>{x}</button>)}</div><button className="primary" onClick={reset}>New game</button></Modal>;
+}
+function VoiceRoomModal({chatId}){
+  const {chats,wsSend,setModal,toast}=useApp();const chat=chats.find(x=>x.id===chatId);const stream=useRef(null);const peers=useRef(new Map());const pending=useRef({});
+  const [members,setMembers]=useState([]);const [status,setStatus]=useState('Joining voice room…');const [muted,setMuted]=useState(false);
+  const send=(to,signal)=>wsSend({type:'voice:signal',chatId,to,signal});
+  async function makePeer(id,offer){if(peers.current.has(id))return peers.current.get(id);const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});peers.current.set(id,pc);stream.current?.getTracks().forEach(t=>pc.addTrack(t,stream.current));pc.onicecandidate=e=>{if(e.candidate)send(id,{type:'candidate',candidate:e.candidate});};pc.ontrack=e=>{let el=document.getElementById('voice-audio-'+id);if(!el){el=document.createElement('audio');el.id='voice-audio-'+id;el.autoplay=true;document.body.appendChild(el);}el.srcObject=e.streams[0];};pc.onconnectionstatechange=()=>setStatus('Voice room · '+[...peers.current.values()].filter(p=>p.connectionState==='connected').length+' connected');if(offer){const desc=await pc.createOffer();await pc.setLocalDescription(desc);send(id,{type:'offer',sdp:desc});}return pc;}
+  useEffect(()=>{let alive=true;(async()=>{try{stream.current=await navigator.mediaDevices.getUserMedia({audio:true,video:false});if(!alive)return;wsSend({type:'voice:join',chatId});setStatus('Microphone connected');}catch(e){toast('Microphone permission: '+e.message);setStatus('Microphone unavailable');}})();const onPeers=e=>{if(e.detail.chatId===chatId){setMembers(e.detail.peers);e.detail.peers.forEach(id=>makePeer(id,true).catch(err=>toast(err.message)));}};const onJoin=e=>{if(e.detail.chatId===chatId){setMembers(v=>[...new Set([...v,e.detail.userId])]);}};const onLeave=e=>{if(e.detail.chatId===chatId){peers.current.get(e.detail.userId)?.close();peers.current.delete(e.detail.userId);setMembers(v=>v.filter(x=>x!==e.detail.userId));}};const onSignal=async e=>{const x=e.detail;if(x.chatId!==chatId)return;try{let pc=await makePeer(x.from,false);if(x.signal.type==='offer'){await pc.setRemoteDescription(x.signal.sdp);for(const q of pending.current[x.from]||[])await pc.addIceCandidate(q);delete pending.current[x.from];const ans=await pc.createAnswer();await pc.setLocalDescription(ans);send(x.from,{type:'answer',sdp:ans});}else if(x.signal.type==='answer'){await pc.setRemoteDescription(x.signal.sdp);for(const q of pending.current[x.from]||[])await pc.addIceCandidate(q);delete pending.current[x.from];}else if(x.signal.type==='candidate'){if(pc.remoteDescription)await pc.addIceCandidate(x.signal.candidate);else(pending.current[x.from]||=[]).push(x.signal.candidate);}}catch(err){toast('Voice connection error: '+err.message);}};window.addEventListener('messenger-voice-peers',onPeers);window.addEventListener('messenger-voice-joined',onJoin);window.addEventListener('messenger-voice-left',onLeave);window.addEventListener('messenger-voice-signal',onSignal);return()=>{alive=false;wsSend({type:'voice:leave',chatId});peers.current.forEach(p=>p.close());peers.current.clear();stream.current?.getTracks().forEach(t=>t.stop());document.querySelectorAll('[id^="voice-audio-"]').forEach(x=>x.remove());window.removeEventListener('messenger-voice-peers',onPeers);window.removeEventListener('messenger-voice-joined',onJoin);window.removeEventListener('messenger-voice-left',onLeave);window.removeEventListener('messenger-voice-signal',onSignal);};},[chatId]);
+  function toggleMute(){const next=!muted;stream.current?.getAudioTracks().forEach(t=>t.enabled=!next);setMuted(next);}
+  return <Modal title={'Voice room · '+(chat?.title||'Chat')} onClose={()=>setModal(null)}><p className="muted">{status}</p><p>{members.length+1} participants</p><div className="voice-members">{members.map(id=><span key={id}>🎙 User #{id}</span>)}</div><button className="primary" onClick={toggleMute}>{muted?'Unmute microphone':'Mute microphone'}</button><small className="muted">Peer-to-peer audio room. Connection quality depends on network and firewall settings.</small></Modal>;
+}
+
 function PollBlock({ poll, messageId }) {
   const { updatePoll, toast } = useApp();
   const [selected,setSelected] = useState(poll.myVotes || []);
@@ -360,7 +400,7 @@ function Message({ m, mine, showSender, chat, fresh, onReply, onEdit, onDelete, 
           <div className="reactions">
             {m.reactions.map((r) => {
               const mineR = r.users.includes(me.id);
-              return <button key={r.emoji} className={'react-chip' + (mineR ? ' mine' : '')} onClick={() => react(m, r.emoji)} aria-pressed={mineR} aria-label={`${r.emoji} ${r.count}`}><span>{r.emoji}</span><b key={r.count}>{r.count}</b></button>;
+              return <button key={r.emoji} className={'react-chip' + (mineR ? ' mine' : '')} onClick={() => react(m, r.emoji)} aria-pressed={mineR} aria-label={`${r.emoji} ${r.count}`}><span>{r.emoji}</span><b key={r.count} className="reaction-pop">{r.count}</b></button>;
             })}
           </div>
         )}
@@ -617,6 +657,8 @@ function ChatView() {
           <div><div className="head-title">{chat.type === 'private' && chat.peer ? nameFor(me, chat.peer) : chat.title}{isBot && <span className="bot-tag">bot</span>}{chat.peer?.statusEmoji && <span className="status-emoji">{chat.peer.statusEmoji}</span>}</div><div className={'head-sub' + (t || chat.peer?.online || (isBot && aiInfo?.online) ? ' live' : '')}>{sub}</div></div>
         </button>
         {chat.type==='private'&&!isBot&&<button className="icon-btn" onClick={()=>setModal({t:'call',chatId:chat.id})} title="Start video call" aria-label="Start video call">📹</button>}
+        {chat.type!=='private'&&<button className="icon-btn" onClick={()=>setModal({t:'voice-room',chatId:chat.id})} title="Join voice room" aria-label="Join voice room">🎙</button>}
+        <button className="icon-btn" onClick={()=>setModal({t:'games'})} title="Mini games" aria-label="Mini games">🎮</button>
         <button className="icon-btn" onClick={()=>setModal({t:'media',chatId:chat.id})} title="Shared media" aria-label="Shared media">🖼</button>
         <button className="icon-btn chat-theme-btn" title="Personal chat theme" aria-label="Change chat theme" onClick={()=>{const i=themes.indexOf(currentTheme);setChatPreference(chat.id,{theme:themes[(i+1)%themes.length]});}}>🎨</button>
         {isBot && <button className="gift-head" onClick={() => sendMessage(chat.id, { text: '/new' })} aria-label="New conversation" title="Forget the context and start fresh">✨ New chat</button>}
@@ -1271,6 +1313,11 @@ function App() {
       {modal?.t === 'qr-profile' && <QRProfileModal />}
       {modal?.t === 'media' && <MediaCenterModal chatId={modal.chatId} />}
       {modal?.t === 'call' && <CallModal chatId={modal.chatId} incoming={modal.incoming} />}
+      {modal?.t === 'stories' && <StoriesModal />}
+      {modal?.t === 'user-id' && <UserIdModal />}
+      {modal?.t === 'sync' && <SyncModal />}
+      {modal?.t === 'games' && <MiniGamesModal />}
+      {modal?.t === 'voice-room' && <VoiceRoomModal chatId={modal.chatId} />}
       {announce && <div className="announce" role="alert"><span>📣 {announce}</span><button onClick={() => setAnnounce(null)} aria-label="Dismiss announcement">✕</button></div>}
       {modal?.t === 'shop' && <GiftShop chatId={modal.chatId} self={modal.self} modal={modal} />}
       {modal?.t === 'gift' && <GiftDetail gift={modal.gift} key={modal.gift.id} />}
