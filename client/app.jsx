@@ -190,6 +190,7 @@ function Sidebar() {
                 {me.isAdmin && <button onClick={() => { setMenu(false); setModal({ t: 'admin' }); }}>🛡 Admin panel</button>}
                 <button onClick={() => { setMenu(false); setModal({t:'privacy'}); }}>🛡 Privacy</button>
                 <button onClick={() => { setMenu(false); setModal({t:'devices'}); }}>💻 Devices</button>
+                <button onClick={() => { setMenu(false); setModal({t:'qr-profile'}); }}>▦ Share profile QR</button>
                 <button onClick={() => { const on=settings.quietUntil>Date.now(); updateSettings({quietUntil:on?0:Date.now()+8*3600000});setMenu(false);toast(on?'Quiet mode off':'Quiet mode on for 8 hours'); }}>🌙 {settings.quietUntil>Date.now()?'Turn off quiet mode':'Quiet mode · 8 hours'}</button>
                 <button onClick={() => { setMenu(false); openSettings('main'); }}>⚙️ Settings</button>
               </div>
@@ -249,7 +250,7 @@ function QRProfileModal() {
   const link=location.origin+'/?add='+encodeURIComponent('@'+me.username);
   useEffect(()=>{let live=true;QRCode.toDataURL(link,{width:280,margin:2,errorCorrectionLevel:'M'}).then(x=>live&&setSrc(x)).catch(e=>setErr(e.message));return()=>{live=false;};},[link]);
   return <Modal title="Share your profile" onClose={()=>setModal(null)}>
-    <div className="qr-profile"><b>@{me.username}</b>{src?<img src={src} alt="Profile QR code"/>:<p>{err||'Generating QR code…'}</p>}<a href={link}>{link}</a><button className="primary" onClick={()=>navigator.clipboard?.writeText(link)}>Copy profile link</button></div>
+    <div className="qr-profile"><b>@{me.username}</b>{src?<img src={src} alt="Profile QR code"/>:<p>{err||'Generating QR code…'}</p>}<a href={link}>{link}</a><button className="primary" onClick={async()=>{try{await navigator.clipboard.writeText(link);}catch{setErr('Clipboard permission unavailable');}}}>Copy profile link</button></div>
   </Modal>;
 }
 function MediaCenterModal({chatId}) {
@@ -330,7 +331,7 @@ function Message({ m, mine, showSender, chat, fresh, onReply, onEdit, onDelete, 
   return (
     <div className={'msg-row' + (mine ? ' mine' : '') + (fresh ? ' fresh' : '')} id={'m' + m.id}>
       {showSender && !mine && <button className="msg-av" onClick={() => onOpenUser(m.sender.id)} aria-label={m.sender.displayName}><Avatar name={m.sender.displayName} color={m.sender.color} src={m.sender.avatar} size={34} /></button>}
-      <div onDoubleClick={(e) => { if (!m.deleted && !m.keptDeleted && !e.target.closest('button,a,audio,video,img')) react(m, '❤️'); }} className={'bubble' + (m.kind === 'gift' ? ' gifty' : '') + (m.deleted ? ' deleted' : '') + (m.keptDeleted ? ' kept' : '') + (bigEmoji ? ' emoji-only' : '')}>
+      <div onDoubleClick={(e) => { if (!m.deleted && !m.keptDeleted && !e.target.closest('button,a,audio,video,img')) react(m, '❤️'); }} onCopy={m.noForward?(e=>e.preventDefault()):undefined} onContextMenu={m.noForward?(e=>e.preventDefault()):undefined} className={'bubble' + (m.noForward?' no-forward':'') + (m.kind === 'gift' ? ' gifty' : '') + (m.deleted ? ' deleted' : '') + (m.keptDeleted ? ' kept' : '') + (bigEmoji ? ' emoji-only' : '')}>
         {showSender && !mine && <div className="sender" style={{ color: m.sender.nameColor || GRADS[m.sender.color % 8][1] }}>{nameFor(me, m.sender)}</div>}
         {m.keptDeleted && <div className="kept-label">🗑 Deleted by sender · saved on this device</div>}
         {m.replyTo && (
@@ -1019,6 +1020,15 @@ function App() {
     if (!getToken()) return;
     api('GET', '/me').then(setMe).catch(() => setToken(null)).finally(() => setBooting(false));
   }, []);
+  useEffect(()=>{
+    if(!me)return;
+    const params=new URLSearchParams(location.search);const add=params.get('add');if(!add)return;
+    history.replaceState({},'',location.pathname);
+    api('GET','/search?q='+encodeURIComponent(add.replace(/^@/,''))).then(r=>{
+      const found=(r.users||[]).find(u=>u.username.toLowerCase()===add.replace(/^@/,'').toLowerCase());
+      if(found)setModal({t:'user',id:found.id});
+    }).catch(()=>{});
+  },[me?.id]);
 
   const patchChat = (id, fn) => setChats((cs) => cs.map((c) => (c.id === id ? fn(c) : c)));
   const sortChats = (cs) => [...cs].sort((a, b) => (b.lastMessage?.createdAt || b.createdAt) - (a.lastMessage?.createdAt || a.createdAt));
