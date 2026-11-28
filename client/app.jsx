@@ -854,7 +854,7 @@ function CreatePollModal({ chatId }) {
     const clean=options.map(x=>x.trim()).filter(Boolean);
     if(!question.trim()||clean.length<2){setErr('Enter a question and at least two options');return;}
     setBusy(true);setErr('');
-    try{mergeMessage(await api('POST','/chats/'+chatId+'/polls',{question:question.trim(),options:clean,multiple,anonymous}));setModal(null);toast('Poll created');}
+    try{mergeMessage(await api('POST','/chats/'+chatId+'/polls',{question:question.trim(),options:clean,multiple,anonymous:true}));setModal(null);toast('Poll created');}
     catch(e){setErr(e.message);}finally{setBusy(false);}
   }
   return <Modal title="Create poll" onClose={()=>setModal(null)}>
@@ -862,7 +862,6 @@ function CreatePollModal({ chatId }) {
     {options.map((v,i)=><input key={i} value={v} maxLength={100} onChange={e=>setOptions(a=>a.map((x,j)=>i===j?e.target.value:x))} placeholder={'Option '+(i+1)} />)}
     {options.length<10&&<button className="primary small ghosty" onClick={()=>setOptions(a=>[...a,''])}>＋ Add option</button>}
     <label className="check-row"><input type="checkbox" checked={multiple} onChange={e=>setMultiple(e.target.checked)}/> Multiple answers</label>
-    <label className="check-row"><input type="checkbox" checked={anonymous} onChange={e=>setAnonymous(e.target.checked)}/> Anonymous voting</label>
     {err&&<div className="error small">{err}</div>}
     <button className="primary" disabled={busy} onClick={submit}>{busy?'Creating…':'Create poll'}</button>
   </Modal>;
