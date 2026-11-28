@@ -45,6 +45,7 @@ const bad = (msg) => new HttpError(400, msg);
 /* Realtime registry                                                   */
 /* ------------------------------------------------------------------ */
 const sockets = new Map(); // userId -> Set<ws>
+const voiceRooms = new Map(); // chatId -> Set<userId>
 const isOnline = (id) => (sockets.get(id)?.size || 0) > 0;
 
 function sendTo(userId, payload) {
@@ -1970,16 +1971,15 @@ wss.on('connection', (ws) => {
       try{requireMember(chatId,userId);}catch{return;}
       const roomKey=String(chatId);
       if(msg.type==='voice:join'){
-        if(!global.voiceRooms)global.voiceRooms=new Map();
-        if(!global.voiceRooms.has(roomKey))global.voiceRooms.set(roomKey,new Set());
-        const room=global.voiceRooms.get(roomKey);
+        if(!voiceRooms.has(roomKey))voiceRooms.set(roomKey,new Set());
+        const room=voiceRooms.get(roomKey);
         const peers=[...room].filter(id=>id!==userId);
         room.add(userId);
         sendTo(userId,{type:'voice:peers',chatId,peers});
         for(const peer of peers)sendTo(peer,{type:'voice:peer-joined',chatId,userId});
       }else if(msg.type==='voice:leave'){
-        const room=global.voiceRooms?.get(roomKey);
-        if(room){room.delete(userId);for(const peer of room)sendTo(peer,{type:'voice:peer-left',chatId,userId});if(!room.size)global.voiceRooms.delete(roomKey);}
+        const room=voiceRooms.get(roomKey);
+        if(room){room.delete(userId);for(const peer of room)sendTo(peer,{type:'voice:peer-left',chatId,userId});if(!room.size)voiceRooms.delete(roomKey);}
       }else{
         const room=global.voiceRooms?.get(roomKey);
         if(!room||!room.has(userId)||!msg.to||!room.has(Number(msg.to))||!msg.signal||typeof msg.signal!=='object')return;
@@ -2000,6 +2000,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     clearTimeout(authTimer);
     if (!userId) return;
+    for(const [roomKey,room] of voiceRooms){if(room.delete(userId)){for(const peer of room)sendTo(peer,{type:'voice:peer-left',chatId:Number(roomKey),userId});if(!room.size)voiceRooms.delete(roomKey);}}
     const set = sockets.get(userId);
     set?.delete(ws);
     if (!set || set.size === 0) {
