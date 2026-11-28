@@ -261,6 +261,7 @@ function PollBlock({ poll, messageId }) {
     </button>)}
     <div className="poll-foot"><span>{poll.total} votes{poll.closed?' · closed':''}</span>
       {!poll.closed && <button className="primary small" disabled={!selected.length||busy} onClick={vote}>Vote</button>}
+      {!poll.closed && poll.canClose && <button className="primary small ghosty" onClick={async()=>{try{updatePoll(messageId,await api('POST','/polls/'+poll.id+'/close'));}catch(e){toast(e.message);}}}>Close poll</button>}
       {poll.myVotes?.length>0 && <span className="muted">Your vote saved</span>}
     </div>
   </div>;
