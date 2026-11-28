@@ -1914,10 +1914,12 @@ wss.on('connection', (ws) => {
     if(msg.type==='call:signal'){
       const chatId=Number(msg.chatId);
       if(!Number.isInteger(chatId)||!msg.signal||typeof msg.signal!=='object')return;
-      const {chat}=(()=>{try{return requireMember(chatId,userId);}catch{return {};}})();
-      if(!chat||chat.type!=='private'||chat.peer===undefined&&db.prepare('SELECT 1 FROM members WHERE chat_id=? AND user_id!=?').get(chatId,userId)==null)return;
+      let chat;
+      try{chat=requireMember(chatId,userId).chat;}catch{return;}
+      if(chat.type!=='private')return;
       const peer=db.prepare('SELECT user_id FROM members WHERE chat_id=? AND user_id!=?').get(chatId,userId)?.user_id;
       if(!peer||db.prepare('SELECT 1 FROM blocked_users WHERE owner_id=? AND blocked_id=?').get(userId,peer)||db.prepare('SELECT 1 FROM blocked_users WHERE owner_id=? AND blocked_id=?').get(peer,userId))return;
+      if(!['offer','answer','candidate','end'].includes(msg.signal.type))return;
       const signal=JSON.stringify(msg.signal);
       if(signal.length>12000)return;
       sendTo(peer,{type:'call:signal',chatId,from:userId,signal:msg.signal});
