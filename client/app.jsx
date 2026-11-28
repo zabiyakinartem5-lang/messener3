@@ -263,7 +263,7 @@ function MediaCenterModal({chatId}) {
 }
 function CallModal({chatId,incoming}) {
   const {chats,wsSend,setModal,toast}=useApp(); const chat=chats.find(x=>x.id===chatId);
-  const pc=useRef(null),local=useRef(null),remote=useRef(null),localStream=useRef(null);
+  const pc=useRef(null),local=useRef(null),remote=useRef(null),localStream=useRef(null),pendingIce=useRef([]);
   const [status,setStatus]=useState(incoming?'Incoming call':'Calling…'); const [accepted,setAccepted]=useState(!incoming);
   const send=(signal)=>wsSend({type:'call:signal',chatId,signal});
   const cleanup=()=>{try{pc.current?.close();}catch{};localStream.current?.getTracks().forEach(t=>t.stop());};
@@ -279,9 +279,9 @@ function CallModal({chatId,incoming}) {
     return conn;
   }
   async function start(){try{const conn=await setup();const offer=await conn.createOffer();await conn.setLocalDescription(offer);send({type:'offer',sdp:offer});setAccepted(true);setStatus('Calling…');}catch(e){toast(e.message||'Camera or microphone permission required');}}
-  async function accept(){try{const conn=await setup();await conn.setRemoteDescription(incoming.sdp);const answer=await conn.createAnswer();await conn.setLocalDescription(answer);send({type:'answer',sdp:answer});setAccepted(true);setStatus('Connecting…');}catch(e){toast(e.message||'Could not accept call');}}
+  async function accept(){try{const conn=await setup();await conn.setRemoteDescription(incoming.sdp);for(const candidate of pendingIce.current.splice(0))await conn.addIceCandidate(candidate);const answer=await conn.createAnswer();await conn.setLocalDescription(answer);send({type:'answer',sdp:answer});setAccepted(true);setStatus('Connecting…');}catch(e){toast(e.message||'Could not accept call');}}
   useEffect(()=>{if(!incoming)start();return()=>cleanup();},[]);
-  useEffect(()=>{const handler=async ev=>{const s=ev.detail;if(s.chatId!==chatId)return;try{if(s.signal.type==='answer'&&pc.current)await pc.current.setRemoteDescription(s.signal.sdp);else if(s.signal.type==='candidate'&&pc.current)await pc.current.addIceCandidate(s.signal.candidate);else if(s.signal.type==='end'){setStatus('Call ended');cleanup();setModal(null);}}catch(e){toast('Call connection error: '+e.message);}};window.addEventListener('messenger-call-signal',handler);return()=>window.removeEventListener('messenger-call-signal',handler);},[chatId]);
+  useEffect(()=>{const handler=async ev=>{const s=ev.detail;if(s.chatId!==chatId)return;try{if(s.signal.type==='answer'&&pc.current){await pc.current.setRemoteDescription(s.signal.sdp);for(const candidate of pendingIce.current.splice(0))await pc.current.addIceCandidate(candidate);}else if(s.signal.type==='candidate'){if(pc.current?.remoteDescription)await pc.current.addIceCandidate(s.signal.candidate);else pendingIce.current.push(s.signal.candidate);}else if(s.signal.type==='end'){setStatus('Call ended');cleanup();setModal(null);}}catch(e){toast('Call connection error: '+e.message);}};window.addEventListener('messenger-call-signal',handler);return()=>window.removeEventListener('messenger-call-signal',handler);},[chatId]);
   function end(){send({type:'end'});cleanup();setModal(null);}
   return <Modal title={'Call · '+(chat?.title||'Chat')} onClose={end}><div className="call-stage"><video ref={remote} autoPlay playsInline className="call-remote"/><video ref={local} autoPlay muted playsInline className="call-local"/>{!accepted&&<div className="call-incoming"><b>{chat?.title||'Incoming call'}</b><button className="primary" onClick={accept}>Accept call</button></div>}</div><p className="muted call-status">{status}</p><button className="danger" onClick={end}>End call</button><small className="muted">Peer-to-peer video. Camera and microphone permissions are required; network/firewall settings may affect connection.</small></Modal>;
 }
