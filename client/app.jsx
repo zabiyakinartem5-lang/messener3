@@ -945,7 +945,7 @@ function App() {
     catch(e){ toast(e.message); throw e; }
   }, [toast]);
   const updatePoll = useCallback((messageId,poll) => {
-    setMessages(all=>{const next={...all};for(const [id,b] of Object.entries(all)){if(b.list.some(m=>m.id===messageId))next[id]={...b,list:b.list.map(m=>m.id===messageId?{...m,poll}:m)};}return next;});
+    setMessages(all=>{const next={...all};for(const [id,b] of Object.entries(all)){if(b.list.some(m=>m.id===messageId))next[id]={...b,list:b.list.map(m=>{if(m.id!==messageId)return m;const safe={...poll};if(!safe.myVotes?.length&&m.poll?.myVotes?.length)safe.myVotes=m.poll.myVotes;return {...m,poll:safe};})};}return next;});
   }, []);
   const logout = useCallback(async () => {
     try { await api('POST', '/logout'); } catch { /* ignore */ }
