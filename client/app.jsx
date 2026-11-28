@@ -1197,7 +1197,7 @@ function App() {
         if (e.type === 'ready') {
           refreshChats();
           if (activeRef.current) loadMessages(activeRef.current).catch(() => {});
-        } else if(e.type==='call:signal') { window.dispatchEvent(new CustomEvent('messenger-call-signal',{detail:e})); if(e.signal?.type==='offer')setModal({t:'call',chatId:e.chatId,incoming:e.signal}); }
+        } else if(e.type==='call:signal') { window.dispatchEvent(new CustomEvent('messenger-call-signal',{detail:e})); if(e.signal?.type==='offer')setModal({t:'call',chatId:e.chatId,incoming:e.signal}); } else if(e.type==='voice:peers')window.dispatchEvent(new CustomEvent('messenger-voice-peers',{detail:e})); else if(e.type==='voice:peer-joined')window.dispatchEvent(new CustomEvent('messenger-voice-joined',{detail:e})); else if(e.type==='voice:peer-left')window.dispatchEvent(new CustomEvent('messenger-voice-left',{detail:e})); else if(e.type==='voice:signal')window.dispatchEvent(new CustomEvent('messenger-voice-signal',{detail:e})); else if(e.type==='stories:refresh')window.dispatchEvent(new Event('messenger-stories-refresh'));
         else if (e.type === 'presence') {
           setChats((cs) => cs.map((c) => (c.peer?.id === e.userId ? { ...c, peer: { ...c.peer, online: e.online, lastSeen: e.lastSeen ?? c.peer.lastSeen } } : c)));
         } else if (e.type === 'user:update') {
