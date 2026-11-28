@@ -143,6 +143,7 @@ function messageView(m, depth = 0) {
   const v = {
     id: m.id, chatId: m.chat_id, kind: m.kind, deleted: !!m.deleted,
     text: m.deleted ? '' : m.text, createdAt: m.created_at, editedAt: m.edited_at,
+    poll: (!m.deleted && depth === 0) ? pollView(m.id, null) : null,
     sender: miniUser(getUser(m.sender_id)), replyTo: null, file: null, gift: null,
     reactions: m.deleted ? [] : reactionsOf(m.id),
   };
@@ -214,9 +215,10 @@ function verifyPassword(password, salt, hash) {
   const b = Buffer.from(hash, 'hex');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
-function createSession(userId) {
+function createSession(userId, userAgent = 'Device') {
   const token = crypto.randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sessions (token,user_id,created_at) VALUES (?,?,?)').run(token, userId, now());
+  const device = String(userAgent || 'Device').slice(0, 180);
+  db.prepare('INSERT INTO sessions (token,user_id,created_at,device,last_active) VALUES (?,?,?,?,?)').run(token, userId, now(), device, now());
   return token;
 }
 function userFromToken(token) {
@@ -352,7 +354,7 @@ route('POST', '/api/register', async ({ req, body }) => {
   db.prepare('UPDATE users SET stars=? WHERE id=?').run(startStars(), id);
   if (invite) db.prepare('UPDATE invites SET uses_left=uses_left-1, used=used+1 WHERE code=?').run(invite.code);
   if (!db.prepare('SELECT 1 FROM users WHERE is_admin=1').get()) db.prepare('UPDATE users SET is_admin=1 WHERE id=?').run(id);
-  return { status: 201, data: { token: createSession(id), user: selfView(getUser(id)) } };
+  return { status: 201, data: { token: createSession(id, req.headers['user-agent']), user: selfView(getUser(id)) } };
 }, { auth: false });
 
 route('POST', '/api/login', async ({ req, body }) => {
@@ -361,7 +363,7 @@ route('POST', '/api/login', async ({ req, body }) => {
   const pw = typeof body.password === 'string' ? body.password : '';
   if (!u || !verifyPassword(pw, u.salt, u.pass_hash)) throw new HttpError(401, 'Wrong username or password');
   if (u.banned) throw new HttpError(403, 'This account has been suspended');
-  return { data: { token: createSession(u.id), user: selfView(u) } };
+  return { data: { token: createSession(u.id, req.headers['user-agent']), user: selfView(u) } };
 }, { auth: false });
 
 route('POST', '/api/logout', ({ token }) => {
@@ -1630,6 +1632,133 @@ route('GET', '/api/admin/online', ({ user }) => {
   requireAdmin(user);
   return { data: [...sockets.keys()].map(getUser).filter((u) => u && !u.is_bot).map((u) => ({ id: u.id, username: u.username, name: u.display_name, color: u.color, ghost: !!u.ghost })) };
 });
+
+
+/* ----------------------- Chat personalization ---------------------- */
+function chatPrefView(userId, chatId) {
+  return db.prepare('SELECT favorite,muted_until AS mutedUntil,folder_id AS folderId,theme FROM user_chat_prefs WHERE user_id=? AND chat_id=?').get(userId, chatId)
+    || { favorite: 0, mutedUntil: 0, folderId: null, theme: '' };
+}
+function pollView(messageId, viewerId) {
+  const p = db.prepare('SELECT * FROM polls WHERE message_id=?').get(messageId);
+  if (!p) return null;
+  const options = db.prepare(`SELECT o.id,o.label,o.position,COUNT(v.user_id) AS votes
+    FROM poll_options o LEFT JOIN poll_votes v ON v.option_id=o.id
+    WHERE o.poll_id=? GROUP BY o.id ORDER BY o.position,o.id`).all(p.id);
+  const mine = viewerId == null ? [] : db.prepare('SELECT option_id FROM poll_votes WHERE poll_id=? AND user_id=?').all(p.id, viewerId).map(x => x.option_id);
+  const total = options.reduce((n, o) => n + o.votes, 0);
+  return { id:p.id, question:p.question, multiple:!!p.multiple, anonymous:!!p.anonymous, closed:!!p.closed,
+    options:options.map(o => ({ id:o.id,label:o.label,votes:o.votes,percent:total?Math.round(o.votes*100/total):0 })),
+    total, myVotes:mine };
+}
+route('GET','/api/chat-preferences',({user}) => ({
+  data:{
+    folders:db.prepare('SELECT id,name,position FROM chat_folders WHERE user_id=? ORDER BY position,id').all(user.id),
+    chats:db.prepare('SELECT chat_id AS chatId,favorite,muted_until AS mutedUntil,folder_id AS folderId,theme FROM user_chat_prefs WHERE user_id=?').all(user.id)
+  }
+}));
+route('POST','/api/chat-folders',({user,body})=>{
+  const name=str(body.name,32,'Folder name');
+  if(!name) throw bad('Folder name is required');
+  if(db.prepare('SELECT COUNT(*) AS n FROM chat_folders WHERE user_id=?').get(user.id).n>=20) throw bad('You can create up to 20 folders');
+  const r=db.prepare('INSERT INTO chat_folders(user_id,name,position,created_at) VALUES(?,?,(SELECT COALESCE(MAX(position),-1)+1 FROM chat_folders WHERE user_id=?),?)').run(user.id,name,user.id,now());
+  return {status:201,data:{id:Number(r.lastInsertRowid),name,position:0}};
+});
+route('DELETE','/api/chat-folders/:id',({user,params})=>{
+  const id=intParam(params.id);
+  const r=db.prepare('DELETE FROM chat_folders WHERE id=? AND user_id=?').run(id,user.id);
+  if(!r.changes) throw new HttpError(404,'Folder not found');
+  return {data:{ok:true}};
+});
+route('PATCH','/api/chats/:id/preferences',({user,params,body})=>{
+  const chatId=intParam(params.id); requireMember(chatId,user.id);
+  const old=chatPrefView(user.id,chatId);
+  const favorite=body.favorite===undefined?!!old.favorite:!!body.favorite;
+  const mutedUntil=body.mutedUntil===undefined?Number(old.mutedUntil)||0:Math.max(0,Math.min(Number(body.mutedUntil)||0,now()+365*86400000));
+  let folderId=body.folderId===undefined?old.folderId:body.folderId;
+  if(folderId!==null && folderId!==undefined){
+    folderId=intParam(folderId,'folderId');
+    if(!db.prepare('SELECT 1 FROM chat_folders WHERE id=? AND user_id=?').get(folderId,user.id)) throw bad('Invalid folder');
+  } else folderId=null;
+  const theme=body.theme===undefined?old.theme:str(body.theme,32,'Theme');
+  if(theme && !/^(ocean|lavender|forest|sunset|rose|midnight)$/.test(theme)) throw bad('Invalid chat theme');
+  db.prepare(`INSERT INTO user_chat_prefs(user_id,chat_id,favorite,muted_until,folder_id,theme) VALUES(?,?,?,?,?,?)
+    ON CONFLICT(user_id,chat_id) DO UPDATE SET favorite=excluded.favorite,muted_until=excluded.muted_until,folder_id=excluded.folder_id,theme=excluded.theme`)
+    .run(user.id,chatId,favorite?1:0,mutedUntil,folderId,theme);
+  return {data:chatPrefView(user.id,chatId)};
+});
+route('GET','/api/sessions',({user,token})=>{
+  db.prepare('UPDATE sessions SET last_active=? WHERE token=?').run(now(),token);
+  return {data:db.prepare('SELECT token,device,created_at AS createdAt,last_active AS lastActive FROM sessions WHERE user_id=? ORDER BY last_active DESC').all(user.id)
+    .map(s=>({...s,current:s.token===token,token:undefined}))};
+});
+route('DELETE','/api/sessions/:token',({user,token,params})=>{
+  const target=String(params.token);
+  const row=db.prepare('SELECT token FROM sessions WHERE token=? AND user_id=?').get(target,user.id);
+  if(!row) throw new HttpError(404,'Session not found');
+  if(target===token) throw bad('Use Log out to end the current session');
+  db.prepare('DELETE FROM sessions WHERE token=?').run(target);
+  return {data:{ok:true}};
+});
+route('POST','/api/sessions/revoke-others',({user,token})=>{
+  const n=db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').run(user.id,token).changes;
+  return {data:{revoked:Number(n)}};
+});
+route('GET','/api/blocked-users',({user})=>({data:db.prepare('SELECT u.id,u.username,u.display_name AS displayName FROM blocked_users b JOIN users u ON u.id=b.blocked_id WHERE b.owner_id=? ORDER BY b.created_at DESC').all(user.id)}));
+route('POST','/api/blocked-users',({user,body})=>{
+  const id=intParam(body.userId,'userId');
+  if(id===user.id||!getUser(id)) throw bad('Invalid user');
+  db.prepare('INSERT OR IGNORE INTO blocked_users(owner_id,blocked_id,created_at) VALUES(?,?,?)').run(user.id,id,now());
+  return {data:{ok:true}};
+});
+route('DELETE','/api/blocked-users/:id',({user,params})=>{
+  db.prepare('DELETE FROM blocked_users WHERE owner_id=? AND blocked_id=?').run(user.id,intParam(params.id));
+  return {data:{ok:true}};
+});
+
+/* ------------------------------- Polls ------------------------------ */
+route('POST','/api/chats/:id/polls',({user,params,body})=>{
+  const chatId=intParam(params.id); const {chat,member}=requireMember(chatId,user.id);
+  if(!canPost(chat,member)) throw new HttpError(403,'Only admins can post in this channel');
+  const question=str(body.question,240,'Question');
+  const opts=Array.isArray(body.options)?body.options.map(x=>str(x,100,'Option')).filter(Boolean):[];
+  if(!question||opts.length<2||opts.length>10||new Set(opts.map(x=>x.toLowerCase())).size!==opts.length) throw bad('A poll needs a question and 2–10 unique options');
+  const row=insertMessage({chatId,senderId:user.id,kind:'text',text:'📊 '+question});
+  const p=db.prepare('INSERT INTO polls(message_id,chat_id,question,multiple,anonymous,created_at) VALUES(?,?,?,?,?,?)')
+    .run(row.id,chatId,question,body.multiple?1:0,body.anonymous===false?0:1,now());
+  const pollId=Number(p.lastInsertRowid);
+  const ins=db.prepare('INSERT INTO poll_options(poll_id,label,position) VALUES(?,?,?)');
+  opts.forEach((label,i)=>ins.run(pollId,label,i));
+  const view=messageView(row); view.poll=pollView(row.id,user.id);
+  toChat(chatId,{type:'message:new',message:view});
+  return {status:201,data:view};
+});
+route('POST','/api/polls/:id/vote',({user,params,body})=>{
+  const poll=db.prepare('SELECT * FROM polls WHERE id=?').get(intParam(params.id));
+  if(!poll) throw new HttpError(404,'Poll not found');
+  requireMember(poll.chat_id,user.id);
+  if(poll.closed) throw bad('This poll is closed');
+  const ids=[...new Set((Array.isArray(body.optionIds)?body.optionIds:[body.optionId]).map(Number))];
+  if(!ids.length||ids.some(x=>!Number.isInteger(x)||!db.prepare('SELECT 1 FROM poll_options WHERE id=? AND poll_id=?').get(x,poll.id))) throw bad('Choose a valid option');
+  if(!poll.multiple&&ids.length!==1) throw bad('Choose one option');
+  db.prepare('DELETE FROM poll_votes WHERE poll_id=? AND user_id=?').run(poll.id,user.id);
+  const ins=db.prepare('INSERT INTO poll_votes(poll_id,option_id,user_id,created_at) VALUES(?,?,?,?)');
+  ids.forEach(id=>ins.run(poll.id,id,user.id,now()));
+  const view=pollView(poll.message_id,user.id);
+  toChat(poll.chat_id,{type:'poll:update',messageId:poll.message_id,poll:view});
+  return {data:view};
+});
+route('POST','/api/polls/:id/close',({user,params})=>{
+  const p=db.prepare('SELECT * FROM polls WHERE id=?').get(intParam(params.id));
+  if(!p) throw new HttpError(404,'Poll not found');
+  const {chat,member}=requireMember(p.chat_id,user.id);
+  if(pollOwner(p.message_id)!==user.id&&!isAdmin(member)) throw new HttpError(403,'Only the author or chat admins can close this poll');
+  db.prepare('UPDATE polls SET closed=1 WHERE id=?').run(p.id);
+  const view=pollView(p.message_id,user.id);
+  toChat(p.chat_id,{type:'poll:update',messageId:p.message_id,poll:view});
+  return {data:view};
+});
+function pollOwner(messageId){return db.prepare('SELECT sender_id FROM messages WHERE id=?').get(messageId)?.sender_id;}
 
 /* ------------------------------------------------------------------ */
 /* Static + file serving                                               */
