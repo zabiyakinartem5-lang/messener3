@@ -20,3 +20,4 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run build
       - run: node --check server/index.js && node --check server/db.js
+      - run: node -e "require('./server/index.js')"
