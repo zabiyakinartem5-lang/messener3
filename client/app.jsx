@@ -93,7 +93,7 @@ function Greeting() {
   );
 }
 
-function ChatRow({ c, active, onClick, pinned, onTogglePin }) {
+function ChatRow({ c, active, onClick, pinned, favorite, onTogglePin, onToggleFavorite, onMoveFolder }) {
   const { me, typing } = useApp();
   const m = c.lastMessage;
   const t = typing[c.id];
@@ -108,7 +108,7 @@ function ChatRow({ c, active, onClick, pinned, onTogglePin }) {
         </div>
         <div className="chat-main">
           <div className="chat-top">
-            <span className="chat-title">{pinned && <span title="Pinned">📌 </span>}{c.type === 'channel' ? '📢 ' : c.type === 'group' ? '👥 ' : ''}{c.type === 'private' && c.peer ? nameFor(me, c.peer) : c.title}{c.peer?.isBot && <span className="bot-tag">bot</span>}{c.peer?.statusEmoji && <span className="status-emoji">{c.peer.statusEmoji}</span>}</span>
+            <span className="chat-title">{pinned && <span title="Pinned">📌 </span>}{favorite && <span title="Favorite">⭐ </span>}{c.type === 'channel' ? '📢 ' : c.type === 'group' ? '👥 ' : ''}{c.type === 'private' && c.peer ? nameFor(me, c.peer) : c.title}{c.peer?.isBot && <span className="bot-tag">bot</span>}{c.peer?.statusEmoji && <span className="status-emoji">{c.peer.statusEmoji}</span>}</span>
             <span className="chat-time">{m ? shortDate(m.createdAt) : ''}</span>
           </div>
           <div className="chat-bottom">
@@ -119,6 +119,8 @@ function ChatRow({ c, active, onClick, pinned, onTogglePin }) {
         </div>
       </button>
       <button className={'chat-pin' + (pinned ? ' on' : '')} onClick={onTogglePin} title={pinned ? 'Unpin chat' : 'Pin chat'} aria-label={pinned ? 'Unpin chat' : 'Pin chat'}>{pinned ? '📌' : '＋'}</button>
+      <button className={'chat-pin'+(favorite?' on':'')} onClick={onToggleFavorite} title={favorite?'Remove favorite':'Add to favorites'} aria-label="Favorite chat">{favorite?'⭐':'☆'}</button>
+      <button className="chat-pin" onClick={onMoveFolder} title="Move to folder" aria-label="Move to folder">📁</button>
     </div>
   );
 }
@@ -149,7 +151,7 @@ function SearchResults({ q, onOpenUser, onOpenChat }) {
 }
 
 function Sidebar() {
-  const { chats, activeId, openChat, openPrivate, joinChat, me, setMe, toast, setModal, openSettings } = useApp();
+  const { chats, activeId, openChat, openPrivate, joinChat, me, setMe, toast, setModal, openSettings, chatPrefs, folders, setChatPreference, settings, updateSettings } = useApp();
   const toggleGhost = async () => {
     try { const u = await api('PATCH', '/me', { ghost: !me.ghost }); setMe(u); toast(u.ghost ? 'Ghost mode on 👻' : 'Ghost mode off'); } catch (e) { toast(e.message); }
   };
@@ -162,8 +164,8 @@ function Sidebar() {
     try { localStorage.setItem('messenger-pinned-chats', JSON.stringify(next)); } catch {}
     return next;
   });
-  const FILTERS = [['all', 'All'], ['pinned', '📌 Pinned'], ['unread', 'Unread'], ['people', 'People'], ['groups', 'Groups'], ['channels', 'Channels']];
-  const matches = (c, f) => f === 'all' || (f === 'pinned' && pinned.includes(c.id)) || (f === 'unread' && c.unread > 0) || (f === 'people' && c.type === 'private') || (f === 'groups' && c.type === 'group') || (f === 'channels' && c.type === 'channel');
+  const FILTERS = [['all', 'All'], ['pinned', '📌 Pinned'], ['favorites','⭐ Favorites'], ['unread', 'Unread'], ['people', 'People'], ['groups', 'Groups'], ['channels', 'Channels'], ...folders.map(x=>['folder:'+x.id,'📁 '+x.name])];
+  const matches = (c, f) => f === 'all' || (f === 'pinned' && pinned.includes(c.id)) || (f === 'favorites' && !!chatPrefs[c.id]?.favorite) || (f === 'unread' && c.unread > 0) || (f === 'people' && c.type === 'private') || (f === 'groups' && c.type === 'group') || (f === 'channels' && c.type === 'channel') || (f.startsWith('folder:') && String(chatPrefs[c.id]?.folderId)===f.slice(7));
   const shownChats = chats.filter((c) => matches(c, filter)).sort((a, b) => Number(pinned.includes(b.id)) - Number(pinned.includes(a.id)));
   return (
     <aside className="sidebar">
@@ -185,6 +187,9 @@ function Sidebar() {
                 <button onClick={() => { setMenu(false); openSettings('market'); }}>🛍 Gift Market</button>
                 <button onClick={() => { setMenu(false); openSettings('rewards'); }}>🎡 Rewards</button>
                 {me.isAdmin && <button onClick={() => { setMenu(false); setModal({ t: 'admin' }); }}>🛡 Admin panel</button>}
+                <button onClick={() => { setMenu(false); setModal({t:'privacy'}); }}>🛡 Privacy</button>
+                <button onClick={() => { setMenu(false); setModal({t:'devices'}); }}>💻 Devices</button>
+                <button onClick={() => { const on=settings.quietUntil>Date.now(); updateSettings({quietUntil:on?0:Date.now()+8*3600000});setMenu(false);toast(on?'Quiet mode off':'Quiet mode on for 8 hours'); }}>🌙 {settings.quietUntil>Date.now()?'Turn off quiet mode':'Quiet mode · 8 hours'}</button>
                 <button onClick={() => { setMenu(false); openSettings('main'); }}>⚙️ Settings</button>
               </div>
             </>
@@ -194,7 +199,8 @@ function Sidebar() {
         <button className={'ghost-btn' + (me.ghost ? ' on' : '')} onClick={toggleGhost} aria-pressed={!!me.ghost} aria-label="Ghost mode" title={me.ghost ? 'Ghost mode is on: you are invisible' : 'Turn on ghost mode'}>👻</button>
         <button className="stars-pill" onClick={() => openSettings('gifts')} title="Your Stars balance">⭐ {me.stars}</button>
       </div>
-      {!q.trim() && chats.length > 3 && (
+      {!q.trim() && <div className="folder-actions"><button onClick={async()=>{const name=prompt('Folder name');if(!name?.trim())return;try{const f=await api('POST','/chat-folders',{name:name.trim()});refreshChatPrefs();setFilter('folder:'+f.id);}catch(e){toast(e.message);}}}>＋ New folder</button>{filter.startsWith('folder:')&&<button onClick={async()=>{const id=Number(filter.slice(7));if(confirm('Delete this folder? Chats will remain.')){try{await api('DELETE','/chat-folders/'+id);setFilter('all');refreshChatPrefs();}catch(e){toast(e.message);}}}}>Delete folder</button>}</div>}
+      {!q.trim() && chats.length > 0 && (
         <div className="filter-tabs" role="tablist" aria-label="Filter chats">
           {FILTERS.map(([id, label]) => {
             const n = chats.filter((c) => matches(c, id)).length;
@@ -206,7 +212,10 @@ function Sidebar() {
         {q.trim() ? (
           <SearchResults q={q.trim()} onOpenUser={(u) => { setQ(''); openPrivate(u.id); }} onOpenChat={(c) => { setQ(''); joinChat(c.id); }} />
         ) : chats.length ? (
-          shownChats.length ? shownChats.map((c) => <ChatRow key={c.id} c={c} active={c.id === activeId} pinned={pinned.includes(c.id)} onTogglePin={() => togglePin(c.id)} onClick={() => openChat(c.id)} />) : <div className="empty-note">Nothing here.</div>
+          shownChats.length ? shownChats.map((c) => <ChatRow key={c.id} c={c} active={c.id === activeId} pinned={pinned.includes(c.id)} favorite={!!chatPrefs[c.id]?.favorite}
+            onTogglePin={() => togglePin(c.id)} onToggleFavorite={()=>setChatPreference(c.id,{favorite:!chatPrefs[c.id]?.favorite})}
+            onMoveFolder={()=>{const current=chatPrefs[c.id]?.folderId;const idx=folders.findIndex(x=>x.id===current);const next=folders[(idx+1)%Math.max(1,folders.length)];setChatPreference(c.id,{folderId:current?null:(next?.id??null)});}}
+            onClick={() => openChat(c.id)} />) : <div className="empty-note">Nothing here.</div>
         ) : (
           <div className="empty-note">No chats yet.<br />Search for a username to start one, or create a group.</div>
         )}
@@ -471,7 +480,7 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
 }
 
 function ChatView() {
-  const { chats, activeId, messages, me, typing, sendMessage, editMessage, deleteMessage, loadOlder, setModal, closeChat, wsSend } = useApp();
+  const { chats, activeId, messages, me, typing, sendMessage, editMessage, deleteMessage, loadOlder, setModal, closeChat, wsSend, chatPrefs, setChatPreference } = useApp();
   const chat = chats.find((c) => c.id === activeId);
   const bucket = messages[activeId];
   const list = bucket?.list || [];
@@ -535,14 +544,17 @@ function ChatView() {
     prev = m;
   }
 
+  const themes=['','ocean','lavender','forest','sunset','rose','midnight'];
+  const currentTheme=chatPrefs[chat.id]?.theme||'';
   return (
-    <main className="main">
+    <main className={'main'+(currentTheme?' chat-theme-'+currentTheme:'')}>
       <header className="chat-head">
         <button className="icon-btn back" onClick={closeChat} aria-label="Back">←</button>
         <button className="head-info" onClick={() => setModal(chat.type === 'private' ? { t: 'user', id: chat.peer.id } : { t: 'info', chatId: chat.id })}>
           <Avatar name={chat.title} color={chatColor(chat)} size={42} src={chat.peer?.avatar} />
           <div><div className="head-title">{chat.type === 'private' && chat.peer ? nameFor(me, chat.peer) : chat.title}{isBot && <span className="bot-tag">bot</span>}{chat.peer?.statusEmoji && <span className="status-emoji">{chat.peer.statusEmoji}</span>}</div><div className={'head-sub' + (t || chat.peer?.online || (isBot && aiInfo?.online) ? ' live' : '')}>{sub}</div></div>
         </button>
+        <button className="icon-btn chat-theme-btn" title="Personal chat theme" aria-label="Change chat theme" onClick={()=>{const i=themes.indexOf(currentTheme);setChatPreference(chat.id,{theme:themes[(i+1)%themes.length]});}}>🎨</button>
         {isBot && <button className="gift-head" onClick={() => sendMessage(chat.id, { text: '/new' })} aria-label="New conversation" title="Forget the context and start fresh">✨ New chat</button>}
         {isBot && <button className="icon-btn" onClick={async () => { if (confirm('Delete the whole conversation with the assistant?')) { await api('POST', '/ai/clear'); } }} aria-label="Clear conversation" title="Clear conversation">🗑</button>}
         {chat.type === 'private' && !isBot && (
@@ -1094,8 +1106,9 @@ function App() {
           const viewing = activeRef.current === m.chatId && document.visibilityState === 'visible';
           if (!own && !viewing && m.kind !== 'system') {
             const st = settingsRef.current;
-            if (st.sound) beep();
-            if (st.notify && document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted') {
+            const quiet = Number(st.quietUntil||0) > Date.now();
+            if (!quiet && st.sound) beep();
+            if (!quiet && st.notify && document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted') {
               try { new Notification(m.sender.displayName, { body: preview(m), tag: 'chat' + m.chatId }); } catch { /* ignore */ }
             }
           }
