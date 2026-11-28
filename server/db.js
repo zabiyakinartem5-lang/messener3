@@ -422,3 +422,24 @@ CREATE TABLE IF NOT EXISTS blocked_users (
 addColumn('sessions', 'device', "TEXT NOT NULL DEFAULT 'Device'");
 addColumn('sessions', 'last_active', 'INTEGER NOT NULL DEFAULT 0');
 db.prepare('UPDATE sessions SET last_active=created_at WHERE last_active=0').run();
+
+
+// Stories and per-account device-synced preferences.
+db.exec(`
+CREATE TABLE IF NOT EXISTS stories (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL DEFAULT '',
+  background TEXT NOT NULL DEFAULT 'blue',
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_stories_expiry ON stories(expires_at);
+CREATE TABLE IF NOT EXISTS user_sync (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sync_key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(user_id,sync_key)
+);
+`);
