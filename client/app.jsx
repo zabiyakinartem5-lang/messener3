@@ -400,7 +400,7 @@ function Message({ m, mine, showSender, chat, fresh, onReply, onEdit, onDelete, 
           <div className="reactions">
             {m.reactions.map((r) => {
               const mineR = r.users.includes(me.id);
-              return <button key={r.emoji} className={'react-chip' + (mineR ? ' mine' : '')} onClick={() => react(m, r.emoji)} aria-pressed={mineR} aria-label={`${r.emoji} ${r.count}`}><span>{r.emoji}</span><b key={r.count} className="reaction-pop">{r.count}</b></button>;
+              return <button key={r.emoji} className={'react-chip' + (mineR ? ' mine' : '')} onClick={() => react(m, r.emoji)} aria-pressed={mineR} aria-label={`${r.emoji} ${r.count}`}><span key={r.count} className="reaction-emoji-pop">{r.emoji}</span><b key={r.count} className="reaction-pop">{r.count}</b></button>;
             })}
           </div>
         )}
