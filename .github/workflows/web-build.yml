@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'client/**'
+      - 'server/**'
       - 'public/styles.css'
       - 'package.json'
       - '.github/workflows/web-build.yml'
@@ -18,3 +19,4 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: npm run build
+      - run: node --check server/index.js && node --check server/db.js
