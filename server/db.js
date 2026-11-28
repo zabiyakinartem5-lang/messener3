@@ -363,3 +363,58 @@ db.exec(`CREATE TABLE IF NOT EXISTS ach_claims (
   user_id INTEGER NOT NULL, ach_id TEXT NOT NULL, created_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, ach_id)
 );`);
+
+
+// Per-account chat organization, preferences, polls and session metadata.
+db.exec(`
+CREATE TABLE IF NOT EXISTS chat_folders (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, name)
+);
+CREATE TABLE IF NOT EXISTS user_chat_prefs (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  favorite INTEGER NOT NULL DEFAULT 0,
+  muted_until INTEGER NOT NULL DEFAULT 0,
+  folder_id INTEGER REFERENCES chat_folders(id) ON DELETE SET NULL,
+  theme TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(user_id, chat_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_prefs_user ON user_chat_prefs(user_id, favorite);
+CREATE TABLE IF NOT EXISTS polls (
+  id INTEGER PRIMARY KEY,
+  message_id INTEGER NOT NULL UNIQUE REFERENCES messages(id) ON DELETE CASCADE,
+  chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  question TEXT NOT NULL,
+  multiple INTEGER NOT NULL DEFAULT 0,
+  anonymous INTEGER NOT NULL DEFAULT 1,
+  closed INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS poll_options (
+  id INTEGER PRIMARY KEY,
+  poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS poll_votes (
+  poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  option_id INTEGER NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(poll_id, option_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS blocked_users (
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(owner_id, blocked_id)
+);
+`);
+addColumn('sessions', 'device', "TEXT NOT NULL DEFAULT 'Device'");
+addColumn('sessions', 'last_active', 'INTEGER NOT NULL DEFAULT 0');
+db.prepare('UPDATE sessions SET last_active=created_at WHERE last_active=0').run();
