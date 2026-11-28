@@ -14,7 +14,8 @@
   "dependencies": {
     "ws": "*",
     "react": "^19",
-    "react-dom": "^19"
+    "react-dom": "^19",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "esbuild": "*",
