@@ -305,6 +305,10 @@ function tx(fn) {
   }
 }
 
+
+addColumn('messages', 'expires_at', 'INTEGER');
+addColumn('messages', 'no_forward', 'INTEGER NOT NULL DEFAULT 0');
+
 module.exports = { db, tx, DATA_DIR };
 
 // user reports of messages, handled in the admin panel
