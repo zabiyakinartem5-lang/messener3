@@ -1839,6 +1839,7 @@ const server = http.createServer(async (req, res) => {
       if (r.auth) {
         user = userFromToken(token);
         if (!user) throw new HttpError(401, 'Not signed in');
+        db.prepare('UPDATE sessions SET last_active=? WHERE token=?').run(now(), token);
         if (!user.is_admin && getSetting('maintenance', '0') === '1' && url.pathname !== '/api/logout') throw new HttpError(503, 'Maintenance: ' + getSetting('maintenance_text', 'Back soon.'));
       }
       const isUpload = url.pathname === '/api/upload';
