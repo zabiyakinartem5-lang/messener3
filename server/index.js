@@ -141,7 +141,7 @@ function reactionsOf(messageId) {
 
 function messageView(m, depth = 0, viewerId = null) {
   const v = {
-    id: m.id, chatId: m.chat_id, kind: m.kind, deleted: !!m.deleted,
+    id: m.id, chatId: m.chat_id, kind: m.kind, deleted: !!m.deleted, expiresAt: m.expires_at || null, noForward: !!m.no_forward,
     text: m.deleted ? '' : m.text, createdAt: m.created_at, editedAt: m.edited_at,
     poll: (!m.deleted && depth === 0) ? pollView(m.id, viewerId) : null,
     sender: miniUser(getUser(m.sender_id)), replyTo: null, file: null, gift: null,
@@ -645,8 +645,8 @@ route('GET', '/api/chats/:id/messages', ({ user, params, url }) => {
   const before = Number(url.searchParams.get('before')) || 0;
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 40, 1), 100);
   const rows = before
-    ? db.prepare('SELECT * FROM messages WHERE chat_id=? AND id<? ORDER BY id DESC LIMIT ?').all(chat.id, before, limit)
-    : db.prepare('SELECT * FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT ?').all(chat.id, limit);
+    ? db.prepare('SELECT * FROM messages WHERE chat_id=? AND id<? AND (expires_at IS NULL OR expires_at>?) ORDER BY id DESC LIMIT ?').all(chat.id, before, now(), limit)
+    : db.prepare('SELECT * FROM messages WHERE chat_id=? AND (expires_at IS NULL OR expires_at>?) ORDER BY id DESC LIMIT ?').all(chat.id, now(), limit);
   return { data: { messages: rows.reverse().map((r) => messageView(r, 0, user.id)), hasMore: rows.length === limit } };
 });
 
@@ -671,7 +671,14 @@ route('POST', '/api/chats/:id/messages', ({ user, params, body }) => {
     replyTo = intParam(body.replyTo, 'replyTo');
     if (!db.prepare('SELECT 1 FROM messages WHERE id=? AND chat_id=?').get(replyTo, chat.id)) throw bad('Reply target not found');
   }
-  const row = insertMessage({ chatId: chat.id, senderId: user.id, kind: fileId ? 'file' : 'text', text, fileId, replyTo });
+  const expireHours=Number(body.expireHours||0);
+  if (![0,1,24,168].includes(expireHours)) throw bad('Invalid disappearing-message timer');
+  const noForward=!!body.noForward;
+  let row = insertMessage({ chatId: chat.id, senderId: user.id, kind: fileId ? 'file' : 'text', text, fileId, replyTo });
+  if(expireHours||noForward){
+    db.prepare('UPDATE messages SET expires_at=?,no_forward=? WHERE id=?').run(expireHours?now()+expireHours*3600000:null,noForward?1:0,row.id);
+    row=db.prepare('SELECT * FROM messages WHERE id=?').get(row.id);
+  }
   const view = publishMessage(row);
   maybeAskAssistant(chat, user, row);
   return { status: 201, data: view };
@@ -687,6 +694,17 @@ route('POST', '/api/chats/:id/read', ({ user, params, body }) => {
     toChat(chat.id, { type: 'read', chatId: chat.id, userId: user.id, messageId });
   }
   return { data: { ok: true } };
+});
+
+
+route('GET', '/api/chats/:id/media', ({ user, params, url }) => {
+  const {chat}=requireMember(intParam(params.id),user.id);
+  const kind=url.searchParams.get('kind')||'all';
+  const rows=db.prepare(`SELECT m.id AS messageId,m.created_at AS createdAt,f.id,f.name,f.mime,f.size
+    FROM messages m JOIN files f ON f.id=m.file_id
+    WHERE m.chat_id=? AND m.deleted=0 AND (m.expires_at IS NULL OR m.expires_at>?)
+    ORDER BY m.id DESC LIMIT 300`).all(chat.id,now());
+  return {data:rows.filter(x=>kind==='all'||(kind==='images'?x.mime.startsWith('image/'):kind==='video'?x.mime.startsWith('video/'):!x.mime.startsWith('image/')&&!x.mime.startsWith('video/'))).map(x=>({...x,url:'/files/'+x.id}))};
 });
 
 /* ---------------------------- Messages ----------------------------- */
@@ -1893,6 +1911,18 @@ wss.on('connection', (ws) => {
       if (first && !seenHidden(u)) broadcastAll({ type: 'presence', userId, online: true });
       return;
     }
+    if(msg.type==='call:signal'){
+      const chatId=Number(msg.chatId);
+      if(!Number.isInteger(chatId)||!msg.signal||typeof msg.signal!=='object')return;
+      const {chat}=(()=>{try{return requireMember(chatId,userId);}catch{return {};}})();
+      if(!chat||chat.type!=='private'||chat.peer===undefined&&db.prepare('SELECT 1 FROM members WHERE chat_id=? AND user_id!=?').get(chatId,userId)==null)return;
+      const peer=db.prepare('SELECT user_id FROM members WHERE chat_id=? AND user_id!=?').get(chatId,userId)?.user_id;
+      if(!peer||db.prepare('SELECT 1 FROM blocked_users WHERE owner_id=? AND blocked_id=?').get(userId,peer)||db.prepare('SELECT 1 FROM blocked_users WHERE owner_id=? AND blocked_id=?').get(peer,userId))return;
+      const signal=JSON.stringify(msg.signal);
+      if(signal.length>12000)return;
+      sendTo(peer,{type:'call:signal',chatId,from:userId,signal:msg.signal});
+      return;
+    }
     if (msg.type === 'typing') {
       const chatId = Number(msg.chatId);
       const u = getUser(userId);
@@ -1925,6 +1955,16 @@ setInterval(() => {
     ws._ping?.();
   }
 }, 30000).unref();
+
+// Expire disappearing messages and remove their attachment files.
+setInterval(()=>{
+  const expired=db.prepare('SELECT id,chat_id,file_id FROM messages WHERE expires_at IS NOT NULL AND expires_at<=? AND deleted=0').all(now());
+  for(const m of expired){
+    db.prepare("UPDATE messages SET deleted=1,text='',file_id=NULL WHERE id=?").run(m.id);
+    if(m.file_id)dropFile(m.file_id);
+    toChat(m.chat_id,{type:'message:delete',chatId:m.chat_id,id:m.id,by:0});
+  }
+},60000).unref();
 
 // Drop expired sessions (30 days) and old rate-limit entries once an hour.
 setInterval(() => {
