@@ -234,6 +234,29 @@ const BIG_EMOJI = /^(?:\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictograph
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉'];
 
+function PollBlock({ poll, messageId }) {
+  const { updatePoll, toast } = useApp();
+  const [selected,setSelected] = useState(poll.myVotes || []);
+  const [busy,setBusy] = useState(false);
+  useEffect(()=>setSelected(poll.myVotes || []),[poll.myVotes?.join(',')]);
+  async function vote() {
+    if (!selected.length || busy || poll.closed) return;
+    setBusy(true);
+    try { updatePoll(messageId, await api('POST', '/polls/'+poll.id+'/vote', { optionIds:selected })); }
+    catch(e){ toast(e.message); } finally { setBusy(false); }
+  }
+  return <div className="poll-card"><b>📊 {poll.question}</b>
+    {poll.options.map(o=><button key={o.id} className={'poll-option'+(selected.includes(o.id)?' selected':'')} disabled={poll.closed || busy}
+      onClick={()=>setSelected(v=>poll.multiple?(v.includes(o.id)?v.filter(x=>x!==o.id):[...v,o.id]):[o.id])}>
+      <span>{o.label}</span><small>{o.votes} · {o.percent}%</small><i style={{width:o.percent+'%'}} />
+    </button>)}
+    <div className="poll-foot"><span>{poll.total} votes{poll.closed?' · closed':''}</span>
+      {!poll.closed && <button className="primary small" disabled={!selected.length||busy} onClick={vote}>Vote</button>}
+      {poll.myVotes?.length>0 && <span className="muted">Your vote saved</span>}
+    </div>
+  </div>;
+}
+
 function Message({ m, mine, showSender, chat, fresh, onReply, onEdit, onDelete, onOpenGift, onOpenUser, jumpTo }) {
   const { settings, removeKept, react, me, toast } = useApp();
   const [pick, setPick] = useState(false);
@@ -262,7 +285,8 @@ function Message({ m, mine, showSender, chat, fresh, onReply, onEdit, onDelete, 
               </button>
             )}
             {m.file && <FileBlock file={m.file} />}
-            {m.text && (bigEmoji ? <div className="big-emoji">{m.text.trim()}</div> : m.sender.isBot ? <div className="text"><Markdown text={m.text} /></div> : <div className="text">{m.text}</div>)}
+            {m.poll && <PollBlock poll={m.poll} messageId={m.id} />}
+            {m.text && !m.poll && (bigEmoji ? <div className="big-emoji">{m.text.trim()}</div> : m.sender.isBot ? <div className="text"><Markdown text={m.text} /></div> : <div className="text">{m.text}</div>)}
           </>
         )}
         {!m.deleted && m.reactions?.length > 0 && (
@@ -309,6 +333,7 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
   const ta = useRef(null);
   const fileIn = useRef(null);
   const [emoji, setEmoji] = useState(false);
+  const [stickers, setStickers] = useState(false);
   const { setModal } = useApp();
 
   const draftKey = 'messenger-draft:' + chat.id;
@@ -411,7 +436,12 @@ function Composer({ chat, replyTo, editing, onCancel, onSend, onTyping }) {
           <>
             {!editing && <button className="icon-btn" onClick={() => fileIn.current.click()} aria-label="Attach file" disabled={busy}>📎</button>}
             <input ref={fileIn} type="file" hidden onChange={pick} />
+            {!editing && <button className="icon-btn" onClick={() => setModal({ t: 'poll-create', chatId: chat.id })} aria-label="Create poll" title="Create poll">📊</button>}
+            {!editing && <button className="icon-btn" onClick={() => setStickers(v=>!v)} aria-label="Stickers" aria-expanded={stickers}>🧸</button>}
             <button className="icon-btn" data-emoji-toggle onClick={() => setEmoji((v) => !v)} aria-label="Emoji" aria-expanded={emoji}>😊</button>
+            {stickers && <div className="sticker-tray" role="group" aria-label="Sticker pack">
+              {['🐱','🐼','🦊','🐸','🐻','🐰','🦄','👻','🤖','💖','🔥','✨','🎉','🥳','🌈','🚀'].map(e=><button key={e} onClick={async()=>{setStickers(false);await onSend({text:e});}}>{e}</button>)}
+            </div>}
             {emoji && (
               <EmojiPicker onClose={() => setEmoji(false)} onPick={(e) => {
                 const el = ta.current; const a = el?.selectionStart ?? text.length; const b = el?.selectionEnd ?? text.length;
@@ -803,6 +833,57 @@ function ChatInfo({ chatId }) {
   );
 }
 
+function CreatePollModal({ chatId }) {
+  const { setModal, mergeMessage, toast } = useApp();
+  const [question,setQuestion]=useState(''); const [options,setOptions]=useState(['','']);
+  const [multiple,setMultiple]=useState(false); const [anonymous,setAnonymous]=useState(true);
+  const [busy,setBusy]=useState(false); const [err,setErr]=useState('');
+  async function submit(){
+    const clean=options.map(x=>x.trim()).filter(Boolean);
+    if(!question.trim()||clean.length<2){setErr('Enter a question and at least two options');return;}
+    setBusy(true);setErr('');
+    try{mergeMessage(await api('POST','/chats/'+chatId+'/polls',{question:question.trim(),options:clean,multiple,anonymous}));setModal(null);toast('Poll created');}
+    catch(e){setErr(e.message);}finally{setBusy(false);}
+  }
+  return <Modal title="Create poll" onClose={()=>setModal(null)}>
+    <label>Question<input value={question} maxLength={240} onChange={e=>setQuestion(e.target.value)} placeholder="Ask a question" /></label>
+    {options.map((v,i)=><input key={i} value={v} maxLength={100} onChange={e=>setOptions(a=>a.map((x,j)=>i===j?e.target.value:x))} placeholder={'Option '+(i+1)} />)}
+    {options.length<10&&<button className="primary small ghosty" onClick={()=>setOptions(a=>[...a,''])}>＋ Add option</button>}
+    <label className="check-row"><input type="checkbox" checked={multiple} onChange={e=>setMultiple(e.target.checked)}/> Multiple answers</label>
+    <label className="check-row"><input type="checkbox" checked={anonymous} onChange={e=>setAnonymous(e.target.checked)}/> Anonymous voting</label>
+    {err&&<div className="error small">{err}</div>}
+    <button className="primary" disabled={busy} onClick={submit}>{busy?'Creating…':'Create poll'}</button>
+  </Modal>;
+}
+function DevicesModal() {
+  const {setModal,toast}=useApp(); const [items,setItems]=useState([]); const [busy,setBusy]=useState(false);
+  const load=()=>api('GET','/sessions').then(setItems).catch(e=>toast(e.message));
+  useEffect(()=>{load();},[]);
+  async function revoke(id){try{await api('DELETE','/sessions/'+id);load();toast('Session ended');}catch(e){toast(e.message);}}
+  async function revokeOthers(){if(!confirm('End all other sessions?'))return;setBusy(true);try{const r=await api('POST','/sessions/revoke-others');toast('Ended '+r.revoked+' sessions');load();}catch(e){toast(e.message);}finally{setBusy(false);}}
+  return <Modal title="Devices and sessions" onClose={()=>setModal(null)}>
+    <p className="muted">Signed-in devices for this account. Ending a session signs that device out.</p>
+    {items.map(s=><div className="device-row" key={s.id}><div><b>{s.device||'Device'}</b><small>{s.current?'This device · current session':'Last active '+shortDate(s.lastActive||s.createdAt)}</small></div>{!s.current&&<button className="danger small" onClick={()=>revoke(s.id)}>End</button>}</div>)}
+    {items.some(s=>!s.current)&&<button className="danger" disabled={busy} onClick={revokeOthers}>End all other sessions</button>}
+  </Modal>;
+}
+function PrivacyModal() {
+  const {me,setMe,setModal,toast}=useApp(); const [blocked,setBlocked]=useState([]); const [query,setQuery]=useState(''); const [found,setFound]=useState([]);
+  const load=()=>api('GET','/blocked-users').then(setBlocked).catch(()=>{});
+  useEffect(()=>{load();},[]);
+  useEffect(()=>{if(!query.trim()){setFound([]);return;}const id=setTimeout(()=>api('GET','/search?q='+encodeURIComponent(query)).then(r=>setFound(r.users||[])).catch(()=>{}),250);return()=>clearTimeout(id);},[query]);
+  async function toggle(field){try{setMe(await api('PATCH','/me',{[field]:!me[field]}));}catch(e){toast(e.message);}}
+  async function block(id){try{await api('POST','/blocked-users',{userId:id});setQuery('');load();toast('User blocked');}catch(e){toast(e.message);}}
+  async function unblock(id){try{await api('DELETE','/blocked-users/'+id);load();}catch(e){toast(e.message);}}
+  return <Modal title="Privacy" onClose={()=>setModal(null)}>
+    <label className="check-row"><input type="checkbox" checked={!!me.hideSeen} onChange={()=>toggle('hideSeen')}/> Hide last seen</label>
+    <label className="check-row"><input type="checkbox" checked={!!me.ghost} onChange={()=>toggle('ghost')}/> Ghost mode (hide online and read status)</label>
+    <h4>Blocked users</h4><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a user to block" />
+    {found.filter(u=>u.id!==me.id&&!blocked.some(b=>b.id===u.id)).slice(0,5).map(u=><button className="chat-row" key={u.id} onClick={()=>block(u.id)}>{u.displayName} · @{u.username} <b>Block</b></button>)}
+    {blocked.map(u=><div className="device-row" key={u.id}><b>{u.displayName} · @{u.username}</b><button className="primary small ghosty" onClick={()=>unblock(u.id)}>Unblock</button></div>)}
+  </Modal>;
+}
+
 /* =================================== App =================================== */
 function App() {
   const [me, setMe] = useState(null);
@@ -816,6 +897,8 @@ function App() {
   const [settings, setSettings] = useState(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(null); // null | page id
   const [contacts, setContacts] = useState([]);
+  const [chatPrefs, setChatPrefs] = useState({});
+  const [folders, setFolders] = useState([]);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const wsRef = useRef(null);
@@ -842,6 +925,16 @@ function App() {
   }, [settings]);
 
   const refreshChats = useCallback(async () => { setChats(await api('GET', '/chats')); }, []);
+  const refreshChatPrefs = useCallback(async () => {
+    try { const r=await api('GET','/chat-preferences'); setFolders(r.folders||[]); setChatPrefs(Object.fromEntries((r.chats||[]).map(x=>[x.chatId,x]))); } catch {}
+  }, []);
+  const setChatPreference = useCallback(async (chatId, patch) => {
+    try { const p=await api('PATCH','/chats/'+chatId+'/preferences',patch); setChatPrefs(all=>({...all,[chatId]:p})); return p; }
+    catch(e){ toast(e.message); throw e; }
+  }, [toast]);
+  const updatePoll = useCallback((messageId,poll) => {
+    setMessages(all=>{const next={...all};for(const [id,b] of Object.entries(all)){if(b.list.some(m=>m.id===messageId))next[id]={...b,list:b.list.map(m=>m.id===messageId?{...m,poll}:m)};}return next;});
+  }, []);
   const logout = useCallback(async () => {
     try { await api('POST', '/logout'); } catch { /* ignore */ }
     setToken(null); wsRef.current?.close(); setMe(null); setChats([]); setMessages({}); setActiveId(null); setSettingsOpen(null); setModal(null); setContacts([]);
@@ -965,6 +1058,7 @@ function App() {
   useEffect(() => {
     if (!me) return;
     refreshChats();
+    refreshChatPrefs();
     api('GET', '/contacts').then(setContacts).catch(() => {});
     let closed = false, retry = 0, timer;
     const connect = () => {
@@ -1069,7 +1163,7 @@ function App() {
   if (!me) return <Auth onAuth={setMe} />;
 
   const ctx = {
-    me, setMe, chats, activeId, messages, typing, setModal, toast, wsSend,
+    me, setMe, chats, activeId, messages, typing, setModal, toast, wsSend, chatPrefs, folders, setChatPreference, updatePoll,
     openChat, openPrivate, joinChat, leaveChat, closeChat: () => setActiveId(null), logout,
     sendMessage, editMessage, deleteMessage, loadOlder, mergeMessage, mergeGift, giftsVersion, react, refreshChats,
     settings, updateSettings, settingsStart: settingsOpen,
@@ -1085,6 +1179,9 @@ function App() {
         <MiniPlayer />
       </div>
       {modal?.t === 'admin' && <AdminPanel />}
+      {modal?.t === 'poll-create' && <CreatePollModal chatId={modal.chatId} />}
+      {modal?.t === 'devices' && <DevicesModal />}
+      {modal?.t === 'privacy' && <PrivacyModal />}
       {announce && <div className="announce" role="alert"><span>📣 {announce}</span><button onClick={() => setAnnounce(null)} aria-label="Dismiss announcement">✕</button></div>}
       {modal?.t === 'shop' && <GiftShop chatId={modal.chatId} self={modal.self} modal={modal} />}
       {modal?.t === 'gift' && <GiftDetail gift={modal.gift} key={modal.gift.id} />}
