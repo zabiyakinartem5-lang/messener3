@@ -1652,7 +1652,10 @@ function pollView(messageId, viewerId) {
     WHERE o.poll_id=? GROUP BY o.id ORDER BY o.position,o.id`).all(p.id);
   const mine = viewerId == null ? [] : db.prepare('SELECT option_id FROM poll_votes WHERE poll_id=? AND user_id=?').all(p.id, viewerId).map(x => x.option_id);
   const total = options.reduce((n, o) => n + o.votes, 0);
+  const author=pollOwner(messageId);
+  const member=viewerId==null?null:db.prepare('SELECT role FROM members WHERE chat_id=? AND user_id=?').get(p.chat_id,viewerId);
   return { id:p.id, question:p.question, multiple:!!p.multiple, anonymous:!!p.anonymous, closed:!!p.closed,
+    canClose:viewerId!=null&&(author===viewerId||!!member&&(member.role==='owner'||member.role==='admin')),
     options:options.map(o => ({ id:o.id,label:o.label,votes:o.votes,percent:total?Math.round(o.votes*100/total):0 })),
     total, myVotes:mine };
 }
@@ -1704,10 +1707,12 @@ route('DELETE','/api/sessions/:token',({user,token,params})=>{
   if(!row) throw new HttpError(404,'Session not found');
   if(row.token===token) throw bad('Use Log out to end the current session');
   db.prepare('DELETE FROM sessions WHERE token=?').run(row.token);
+  for(const ws of sockets.get(user.id)||[]) if(ws._sessionToken===row.token) ws.close(4001,'session ended');
   return {data:{ok:true}};
 });
 route('POST','/api/sessions/revoke-others',({user,token})=>{
   const n=db.prepare('DELETE FROM sessions WHERE user_id=? AND token!=?').run(user.id,token).changes;
+  for(const ws of sockets.get(user.id)||[]) if(ws._sessionToken!==token) ws.close(4001,'session ended');
   return {data:{revoked:Number(n)}};
 });
 route('GET','/api/blocked-users',({user})=>({data:db.prepare('SELECT u.id,u.username,u.display_name AS displayName FROM blocked_users b JOIN users u ON u.id=b.blocked_id WHERE b.owner_id=? ORDER BY b.created_at DESC').all(user.id)}));
@@ -1761,7 +1766,7 @@ route('POST','/api/polls/:id/close',({user,params})=>{
   if(pollOwner(p.message_id)!==user.id&&!isAdmin(member)) throw new HttpError(403,'Only the author or chat admins can close this poll');
   db.prepare('UPDATE polls SET closed=1 WHERE id=?').run(p.id);
   const view=pollView(p.message_id,user.id);
-  toChat(p.chat_id,{type:'poll:update',messageId:p.message_id,poll:view});
+  toChat(p.chat_id,{type:'poll:update',messageId:p.message_id,poll:pollView(p.message_id,null)});
   return {data:view};
 });
 function pollOwner(messageId){return db.prepare('SELECT sender_id FROM messages WHERE id=?').get(messageId)?.sender_id;}
@@ -1878,6 +1883,7 @@ wss.on('connection', (ws) => {
       const u = userFromToken(msg.token);
       if (!u) return ws.close(4003, 'unauthorized');
       userId = u.id;
+      ws._sessionToken = msg.token;
       clearTimeout(authTimer);
       const first = !isOnline(userId);
       if (!sockets.has(userId)) sockets.set(userId, new Set());
