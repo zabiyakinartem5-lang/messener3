@@ -1741,7 +1741,7 @@ route('POST','/api/chats/:id/polls',({user,params,body})=>{
   const ins=db.prepare('INSERT INTO poll_options(poll_id,label,position) VALUES(?,?,?)');
   opts.forEach((label,i)=>ins.run(pollId,label,i));
   const view=messageView(row,0,user.id); view.poll=pollView(row.id,user.id);
-  toChat(chatId,{type:'message:new',message:view});
+  toChat(chatId,{type:'message:new',message:messageView(row,0,null)});
   return {status:201,data:view};
 });
 route('POST','/api/polls/:id/vote',({user,params,body})=>{
